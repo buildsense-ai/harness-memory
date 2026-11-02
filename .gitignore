@@ -4,3 +4,4 @@ dist/
 *.local.json
 .superpowers/
 coverage/
+__pycache__/
