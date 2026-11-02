@@ -2,9 +2,11 @@ import { beforeAll, afterAll, it, expect } from "vitest";
 import { Pool } from "pg";
 import { buildApp } from "../src/app.js";
 import { createProject } from "../src/db/projects.js";
+import { migrate } from "../src/db/migrate.js";
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
 let app: any, key: string;
 beforeAll(async () => {
+  await migrate(pool);
   key = (await createProject(pool, "api")).key;
   app = await buildApp({ pool });
 });

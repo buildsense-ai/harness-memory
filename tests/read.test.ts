@@ -6,10 +6,12 @@ import { ingestBatch } from "../src/ingest.js";
 import { projectRecord } from "../src/adapters/index.js";
 import { readReference, readRaw } from "../src/read.js";
 import { ref, sha256 } from "../src/contracts.js";
+import { migrate } from "../src/db/migrate.js";
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
 let p: string, q: string, ack: any;
 const raw = readFileSync("tests/fixtures/xiaoba.jsonl");
 beforeAll(async () => {
+  await migrate(pool);
   p = (await createProject(pool, "read")).project_id;
   q = (await createProject(pool, "other")).project_id;
   ack = await ingestBatch(pool, p, {
