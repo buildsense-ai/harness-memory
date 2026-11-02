@@ -1,0 +1,21 @@
+[Unit]
+Description=Harness Memory v1
+After=network.target postgresql@16-harnessmemory.service
+
+[Service]
+Type=simple
+User=harness-memory
+Group=harness-memory
+WorkingDirectory=/opt/harness-memory
+EnvironmentFile=/etc/harness-memory/service.env
+ExecStart=/usr/bin/env node dist/src/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
