@@ -1,0 +1,57 @@
+name: Test and deploy main
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: test-deploy-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_USER: harness_memory
+          POSTGRES_DB: harness_memory_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://harness_memory:test-only@127.0.0.1:5432/harness_memory_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.2'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: python3 -m unittest discover -s tests -p test_deploy.py
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: monday
+    steps:
+      - name: Deploy tested main commit over restricted SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.MONDAY_DEPLOY_KEY }}
+          DEPLOY_HOST: ${{ secrets.MONDAY_DEPLOY_HOST }}
+          KNOWN_HOSTS: ${{ secrets.MONDAY_KNOWN_HOSTS }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -i ~/.ssh/deploy_key "harness-memory-deploy@$DEPLOY_HOST" "deploy $COMMIT"
