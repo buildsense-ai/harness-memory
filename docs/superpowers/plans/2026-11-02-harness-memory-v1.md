@@ -154,4 +154,3 @@ README.md / docs/api.md / docs/deployment.md
 - 进度按上述复选框更新。每项先验证失败再实现再验证通过；实现后检查原文不可变、项目隔离和失败不假成功三条底线。
 - 用户已指定在本 Codex 会话开发；不再要求重新选择 Codex/Pi。书面计划仍需按 Superpowers 工作流审阅后开始产品代码；没有授权自动派发子 agent。
 - 本机未安装 executing-plans 技能文件，已定位并读取其官方公开来源 `https://github.com/obra/superpowers/blob/main/skills/executing-plans/SKILL.md`。计划通过后按其当前会话执行流程工作，执行前完整读取正文及实际需要的引用文件，不要求用户另做安装选择。
-

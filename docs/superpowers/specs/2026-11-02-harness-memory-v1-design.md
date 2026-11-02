@@ -113,4 +113,3 @@ TypeScript、Node.js 20.20+、PostgreSQL 16+。一个服务进程，一个连接
 日志结构已核对 XiaoBa main 2f37165fe1c64adf423c8b9a5ca06726ec82e54b 的 session-turn-logger/session-log-schema，以及 Pi main c9f4c7b9fcd0f3e6b5bbc35c7c9b6cda35580eb8 的 session-format。实施时用实际文件样本验证适配器。
 
 先审阅本精简规格，再编写对应的实施计划；不把上一版被删掉的功能重新塞回计划。优先验证原文保存/读取，再接模型选择，最后补测试搜索与部署。
-
