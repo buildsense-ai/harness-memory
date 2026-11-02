@@ -77,6 +77,7 @@ export async function readReference(
   return {
     ref: req.ref,
     goal: ep.goal,
+    missing_pair_refs: ep.missing_pair_refs,
     chunk_id: ep.chunk_id,
     total_events: total,
     events: rows.rows.map(eventFromRow),

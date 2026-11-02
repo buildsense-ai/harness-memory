@@ -46,8 +46,15 @@ export class ExtractionRunner {
         for (const d of drafts) {
           const ep = ref("ep");
           await c.query(
-            "insert into episodes(id,project_id,run_id,goal,chunk_id) values($1,$2,$3,$4,$5)",
-            [ep, p, id, JSON.stringify(d.goal), d.chunk_id],
+            "insert into episodes(id,project_id,run_id,goal,chunk_id,missing_pair_refs) values($1,$2,$3,$4,$5,$6)",
+            [
+              ep,
+              p,
+              id,
+              JSON.stringify(d.goal),
+              d.chunk_id,
+              JSON.stringify(d.missing_pair_refs),
+            ],
           );
           for (const [i, event] of d.event_refs.entries())
             await c.query(
@@ -87,7 +94,7 @@ export class ExtractionRunner {
     ).rows[0];
     assert(r, "unknown extraction", 404);
     const eps = await this.pool.query(
-      "select id episode_ref,goal,chunk_id from episodes where project_id=$1 and run_id=$2 order by id",
+      "select id episode_ref,goal,chunk_id,missing_pair_refs from episodes where project_id=$1 and run_id=$2 order by id",
       [p, id],
     );
     return { ...r, episodes: eps.rows };

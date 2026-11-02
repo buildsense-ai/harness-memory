@@ -39,8 +39,8 @@ export async function snapshotEvents(
   );
   const records = (
     await pool.query(
-      "select id,offset_bytes,metadata from raw_records where project_id=$1 and source_id=$2 and stream_id=$3 and offset_bytes<=$4 order by offset_bytes",
-      [p, req.source_id, req.stream_id, end],
+      "select id,offset_bytes,metadata from raw_records where project_id=$1 and source_id=$2 and stream_id=$3 and offset_bytes<$4 order by offset_bytes",
+      [p, req.source_id, req.stream_id, Number(s.next_offset)],
     )
   ).rows.map((r) => ({ ...r, ...r.metadata }));
   const boundaries = new Set([
@@ -52,11 +52,12 @@ export async function snapshotEvents(
     boundaries.has(start) && boundaries.has(end),
     "range must use record boundaries",
   );
-  const eligible = records.filter((r) => Number(r.offset_bytes) < end);
   const path =
-    s.harness === "pi" ? selectPiPath(eligible, req.leaf_id) : eligible;
+    s.harness === "pi" ? selectPiPath(records, req.leaf_id) : records;
   const rawIds = path
-    .filter((r) => Number(r.offset_bytes) >= start)
+    .filter(
+      (r) => Number(r.offset_bytes) >= start && Number(r.offset_bytes) < end,
+    )
     .map((r) => r.id);
   const rows = await pool.query(
     eventSelect +

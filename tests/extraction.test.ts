@@ -103,3 +103,10 @@ it("does not split ordinary provider failures", async () => {
   ).rejects.toThrow("provider failure");
   expect(calls).toBe(1);
 });
+
+it("marks an absent tool counterpart without inventing evidence", async () => {
+  const es = [ev(1, { kind: "tool_result", tool_call_id: "missing" })];
+  const drafts = await extractEpisodes(es, model, 65536);
+  expect(drafts[0]).toHaveProperty("missing_pair_refs", ["evt_1"]);
+  expect(drafts[0].event_refs).toEqual(["evt_1"]);
+});

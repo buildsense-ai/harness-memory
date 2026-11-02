@@ -7,8 +7,64 @@ import { ExtractionRunner } from "../src/extraction/runner.js";
 import { searchEpisodes } from "../src/search.js";
 import { readReference } from "../src/read.js";
 import { snapshotEvents } from "../src/extraction/snapshot.js";
+import { migrate } from "../src/db/migrate.js";
+import { beforeAll } from "vitest";
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+beforeAll(() => migrate(pool));
 afterAll(() => pool.end());
+
+it("resolves Pi leaf ancestry before applying an earlier byte range", async () => {
+  const p = (await createProject(pool, "pi-range")).project_id;
+  const values = [
+    {
+      type: "message",
+      id: "a",
+      parentId: null,
+      message: { role: "user", content: "root" },
+    },
+    {
+      type: "message",
+      id: "b",
+      parentId: "a",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "branch b" }],
+      },
+    },
+    {
+      type: "message",
+      id: "c",
+      parentId: "b",
+      message: { role: "user", content: "late leaf" },
+    },
+  ];
+  let offset = 0;
+  const records = values.map((x) => {
+    const raw = Buffer.from(JSON.stringify(x) + "\n");
+    const r = {
+      offset,
+      raw_base64: raw.toString("base64"),
+      events: projectRecord("pi", raw).events.map(
+        ({ content, text, fidelity, ...d }) => d,
+      ),
+    };
+    offset += raw.length;
+    return r;
+  });
+  await ingestBatch(pool, p, {
+    source_id: p,
+    stream_id: "pi",
+    harness: "pi",
+    records,
+  });
+  const es = await snapshotEvents(pool, p, {
+    source_id: p,
+    stream_id: "pi",
+    leaf_id: "c",
+    end_offset: records[1].offset,
+  });
+  expect(es.map((e) => e.native_id)).toEqual(["a"]);
+});
 async function seed() {
   const p = await createProject(pool, "search");
   const raw = Buffer.from(

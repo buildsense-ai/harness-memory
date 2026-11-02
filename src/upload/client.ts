@@ -48,29 +48,35 @@ export async function uploadOnce(
     count += batch.records.length;
     batch = { ...batch, records: [] };
   };
-  for await (const { offset, raw } of readCompleteRecords(
-    config.file,
-    state.offset,
-  )) {
-    const events = projectRecord(config.harness, raw).events.map(
-      ({ content, text, fidelity, ...d }) => d,
-    );
-    const record = { offset, raw_base64: raw.toString("base64"), events };
-    if (
-      Buffer.byteLength(
-        JSON.stringify({ ...batch, records: [...batch.records, record] }),
-      ) >
-      4 * 1024 * 1024
-    ) {
-      await flush();
-      assert(
-        Buffer.byteLength(JSON.stringify({ ...batch, records: [record] })) <=
-          4 * 1024 * 1024,
-        "record too large",
+  try {
+    for await (const { offset, raw } of readCompleteRecords(
+      config.file,
+      state.offset,
+    )) {
+      const events = projectRecord(config.harness, raw).events.map(
+        ({ content, text, fidelity, ...d }) => d,
       );
+      const record = { offset, raw_base64: raw.toString("base64"), events };
+      if (
+        Buffer.byteLength(
+          JSON.stringify({ ...batch, records: [...batch.records, record] }),
+        ) >
+        4 * 1024 * 1024
+      ) {
+        await flush();
+        assert(
+          Buffer.byteLength(JSON.stringify({ ...batch, records: [record] })) <=
+            4 * 1024 * 1024,
+          "record too large",
+        );
+      }
+      batch.records.push(record);
+      if (batch.records.length >= 100) await flush();
     }
-    batch.records.push(record);
-    if (batch.records.length >= 100) await flush();
+  } catch (e) {
+    if (e instanceof HttpError && e.message === "record too large")
+      await flush();
+    throw e;
   }
   await flush();
   return {

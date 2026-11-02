@@ -93,3 +93,24 @@ it("rejects reusing state for a different endpoint or key", async () => {
     uploadOnce({ ...s.config, key: "other" }, s.state),
   ).rejects.toThrow(/state/);
 });
+
+it("acknowledges the valid prefix before stopping at an oversized record", async () => {
+  const s = await setup();
+  await writeFile(
+    s.file,
+    Buffer.concat([s.raw, Buffer.from("x".repeat(4 * 1024 * 1024 + 1) + "\n")]),
+  );
+  let calls = 0;
+  await expect(
+    uploadOnce(s.config, s.state, (async (_u: any, i: any) => {
+      calls++;
+      const b = JSON.parse(i.body);
+      expect(b.records).toHaveLength(1);
+      return new Response(
+        JSON.stringify({ next_offset: s.raw.length, records: [] }),
+      );
+    }) as any),
+  ).rejects.toThrow(/too large/);
+  expect(calls).toBe(1);
+  expect(JSON.parse(await readFile(s.state, "utf8")).offset).toBe(s.raw.length);
+});

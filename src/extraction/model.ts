@@ -4,7 +4,7 @@ import {
   type Goal,
   type EpisodeDraft,
 } from "../contracts.js";
-import { bisect, completeSelection } from "./chunk.js";
+import { bisect, completeSelection, toolPairs } from "./chunk.js";
 export interface ChatModel {
   discover(events: StoredEvent[]): Promise<Goal[]>;
   select(goal: Goal, events: StoredEvent[]): Promise<string[]>;
@@ -76,6 +76,17 @@ export async function extractEpisodes(
           goal: { description: goal.description },
           event_refs: selected,
           chunk_id: chunk,
+          missing_pair_refs: (() => {
+            const paired = new Set(toolPairs(events).flat());
+            return events
+              .filter(
+                (e, i) =>
+                  selected.includes(e.ref) &&
+                  (e.kind === "tool_call" || e.kind === "tool_result") &&
+                  !paired.has(i),
+              )
+              .map((e) => e.ref);
+          })(),
         });
     }
     return drafts;

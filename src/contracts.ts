@@ -49,6 +49,7 @@ export interface EpisodeDraft {
   goal: Goal;
   event_refs: string[];
   chunk_id: string;
+  missing_pair_refs: string[];
 }
 export class HttpError extends Error {
   constructor(
