@@ -1,0 +1,4 @@
+{"type":"session","version":3,"id":"synthetic-pi","timestamp":"2026-11-02T00:00:00Z"}
+{"type":"message","id":"a","parentId":null,"message":{"role":"user","content":"配置上传服务，测试标记 hm_pi_365"}}
+{"type":"message","id":"b","parentId":"a","message":{"role":"assistant","content":[{"type":"text","text":"检查服务"},{"type":"toolCall","id":"call1","name":"bash","arguments":{"command":"check-service"}}]}}
+{"type":"message","id":"c","parentId":"b","message":{"role":"toolResult","toolCallId":"call1","content":[{"type":"text","text":"hm_pi_365: service running"}]}}

@@ -1,0 +1,1 @@
+{"entry_type":"turn","turn":1,"timestamp":"2026-11-02T00:00:00Z","user":{"text":"检查上传服务，测试标记 hm_upload_365"},"assistant":{"text":"上传服务已经启动，使用8460端口。","tool_calls":[{"id":"call1","name":"shell","arguments":{"command":"check-service"},"result":"hm_upload_365: listening on 8460"}]}}
