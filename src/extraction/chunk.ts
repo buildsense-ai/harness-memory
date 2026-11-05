@@ -12,14 +12,14 @@ export function toolPairs(es: StoredEvent[]): [number, number][] {
   });
   return pairs;
 }
-export function bisect(es: StoredEvent[]): [StoredEvent[], StoredEvent[]] {
+export function bisect(es: StoredEvent[], target = es.length / 2): [StoredEvent[], StoredEvent[]] {
   const pairs = toolPairs(es);
   const cuts = es
     .map((_, i) => i)
     .filter((i) => i > 0 && !pairs.some(([a, b]) => a < i && i <= b));
   assert(cuts.length, "indivisible input exceeds model budget", 422);
   const cut = cuts.sort(
-    (a, b) => Math.abs(a - es.length / 2) - Math.abs(b - es.length / 2),
+    (a, b) => Math.abs(a - target) - Math.abs(b - target),
   )[0];
   return [es.slice(0, cut), es.slice(cut)];
 }

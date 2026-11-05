@@ -1,15 +1,17 @@
 # Harness Memory
 
-An early, deliberately small memory service for XiaoBa and Pi. Upload recorded logs, manually extract goal-related event groups, and read the original evidence by immutable reference. Keyword search is a diagnostic implementation.
+An early, deliberately small memory service for XiaoBa and Pi. Upload recorded logs, manually partition dialogue into task threads, select evidence-preserving episodes from the full event snapshot, and read original evidence by immutable reference. Keyword search is a diagnostic implementation.
 
 ## What works in v0.1
 
 - Two format adapters, one file uploader with optional 30-second polling.
 - PostgreSQL transactions, project Keys, basic record deduplication and confirmed byte offsets.
-- Manual `discover goals → select source event IDs`; overlong inputs split at event boundaries.
+- Manual two-stage extraction: partition query/message dialogue into task threads and assign user queries; then select source event IDs separately for each thread from the full event snapshot.
+- Stage 1 returns task threads, query assignments, and an evidence-backed list of directed `depends_on`, `continues`, or `supersedes` relations. The relation list may be empty and does not change Episode membership.
+- Stage 2 returns one ordered, potentially discontinuous Episode per task thread with original event references and a compact evidence-coverage index. Tool calls/results are kept together; routine transient noise may be omitted while diagnostic failures and successful paths remain.
 - Read one event, one episode, or the uploaded raw record. The model never rewrites returned evidence.
 
-No automatic extraction, Skill/Wiki generation, embedding search, cache reuse, account console, or automatic historical-file discovery. XiaoBa aggregate turn logs cannot reconstruct missing intermediate assistant messages. Pi extraction follows one explicit branch. Chunked extraction can create separate episodes for the same goal.
+No automatic extraction, Skill/Wiki generation, embedding search, cache reuse, account console, or automatic historical-file discovery. XiaoBa aggregate turn logs cannot reconstruct missing intermediate assistant messages. Pi extraction follows one explicit branch. Oversized Stage 1 chunks are kept separate; Stage 2 chunks are merged back into one Episode for their task thread.
 
 ## Run
 

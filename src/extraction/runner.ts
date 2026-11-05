@@ -39,21 +39,28 @@ export class ExtractionRunner {
   }
   private async execute(p: string, id: string, events: StoredEvent[]) {
     try {
-      const drafts = await extractEpisodes(events, this.model!, this.budget),
+      const result = await extractEpisodes(events, this.model!, this.budget),
         c = await this.pool.connect();
       try {
         await c.query("BEGIN");
-        for (const d of drafts) {
+        await c.query(
+          "update extraction_runs set task_partition=$3 where id=$1 and project_id=$2",
+          [id, p, JSON.stringify(result.partition)],
+        );
+        for (const d of result.episodes) {
           const ep = ref("ep");
           await c.query(
-            "insert into episodes(id,project_id,run_id,goal,chunk_id,missing_pair_refs) values($1,$2,$3,$4,$5,$6)",
+            "insert into episodes(id,project_id,run_id,goal,chunk_id,missing_pair_refs,thread_id,task_thread,evidence_coverage) values($1,$2,$3,$4,$5,$6,$7,$8,$9)",
             [
               ep,
               p,
               id,
-              JSON.stringify(d.goal),
+              JSON.stringify({ description: d.thread.desired_outcome }),
               d.chunk_id,
               JSON.stringify(d.missing_pair_refs),
+              d.thread.thread_id,
+              JSON.stringify(d.thread),
+              JSON.stringify(d.evidence_coverage),
             ],
           );
           for (const [i, event] of d.event_refs.entries())
@@ -88,13 +95,13 @@ export class ExtractionRunner {
   async get(p: string, id: string) {
     const r = (
       await this.pool.query(
-        "select id,status,error,input_refs,created_at from extraction_runs where project_id=$1 and id=$2",
+        "select id,status,error,input_refs,task_partition,created_at from extraction_runs where project_id=$1 and id=$2",
         [p, id],
       )
     ).rows[0];
     assert(r, "unknown extraction", 404);
     const eps = await this.pool.query(
-      "select id episode_ref,goal,chunk_id,missing_pair_refs from episodes where project_id=$1 and run_id=$2 order by id",
+        "select id episode_ref,goal,thread_id,task_thread,evidence_coverage,chunk_id,missing_pair_refs from episodes where project_id=$1 and run_id=$2 order by id",
       [p, id],
     );
     return { ...r, episodes: eps.rows };

@@ -77,6 +77,9 @@ export async function readReference(
   return {
     ref: req.ref,
     goal: ep.goal,
+    thread_id: ep.thread_id,
+    task_thread: ep.task_thread,
+    evidence_coverage: ep.evidence_coverage,
     missing_pair_refs: ep.missing_pair_refs,
     chunk_id: ep.chunk_id,
     total_events: total,

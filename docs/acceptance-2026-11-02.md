@@ -1,5 +1,7 @@
 # 首版实现与 Monday 验收记录
 
+> This report documents the original 2026-11-02 goal-only release. It predates the task-thread partition and per-thread Episode design in `docs/superpowers/specs/2026-11-05-task-thread-episodes-design.md` and must not be treated as acceptance evidence for that later extraction version.
+
 日期：2026-11-02。产品版本：`ed62ceb7cbb3ff4833c1b844e66cb3059af23369`；后续提交仅补文档和测试初始化，不改变已验收的产品运行代码。
 
 ## 已部署
