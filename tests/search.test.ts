@@ -4,12 +4,31 @@ import { createProject } from "../src/db/projects.js";
 import { ingestBatch } from "../src/ingest.js";
 import { projectRecord } from "../src/adapters/index.js";
 import { ExtractionRunner } from "../src/extraction/runner.js";
+import type { ChatModel, TaskPartition } from "../src/extraction/model.js";
 import { searchEpisodes } from "../src/search.js";
 import { readReference } from "../src/read.js";
 import { snapshotEvents } from "../src/extraction/snapshot.js";
 import { migrate } from "../src/db/migrate.js";
 import { beforeAll } from "vitest";
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+function taskModel(overrides: Partial<ChatModel> = {}): ChatModel {
+  return {
+    partition: async (events) => {
+      const query = events.find((event) => event.kind === "query");
+      const result: TaskPartition = {
+        task_threads: [{ thread_id: "T1", title: "test", desired_outcome: "test outcome", include_topics: [], exclude_topics: [], boundary_note: "single task" }],
+        query_assignments: query ? [{ query_ref: query.ref, thread_ids: ["T1"], role: "origin" }] : [],
+        relations: [],
+      };
+      return result;
+    },
+    select: async (_thread, _assignments, events) => ({
+      event_refs: events.map((event) => event.ref),
+      evidence_coverage: { constraints_and_corrections: [], diagnosis_and_failures: [], decision: [], implementation: [], verification: [], final_state: [] },
+    }),
+    ...overrides,
+  };
+}
 beforeAll(() => migrate(pool));
 afterAll(() => pool.end());
 
@@ -93,15 +112,15 @@ it("publishes selected episodes and searches literal keywords with project isola
   const { p, request } = await seed();
   const runner = new ExtractionRunner(
     pool,
-    {
-      discover: async () => [{ description: "test" }],
-      select: async (_g, es) => es.map((e) => e.ref),
-    },
+    taskModel(),
     65536,
   );
   const { run_id } = await runner.start(p.project_id, request);
   await runner.wait();
-  expect((await runner.get(p.project_id, run_id)).status).toBe("completed");
+  const extraction = await runner.get(p.project_id, run_id);
+  expect(extraction.status).toBe("completed");
+  expect(extraction.task_partition.task_threads).toHaveLength(1);
+  expect(extraction.episodes[0]).toMatchObject({ thread_id: "T1", task_thread: { title: "test" } });
   expect(
     await searchEpisodes(pool, p.project_id, { keywords: ["alpha", "BETA"] }),
   ).toEqual([]);
@@ -109,9 +128,10 @@ it("publishes selected episodes and searches literal keywords with project isola
     keywords: ["中文", "alpha", "%_"],
   });
   expect(r).toHaveLength(1);
-  expect(
-    (await readReference(pool, p.project_id, { ref: r[0].episode_ref })).events,
-  ).toHaveLength(2);
+  const episode = await readReference(pool, p.project_id, { ref: r[0].episode_ref });
+  expect(episode.events).toHaveLength(2);
+  expect(episode.thread_id).toBe("T1");
+  expect(episode.evidence_coverage).toHaveProperty("diagnosis_and_failures");
   expect(
     await searchEpisodes(pool, p.project_id, {
       keywords: ["alpha", "beta"],
@@ -135,13 +155,12 @@ it("rejects concurrent runs and publishes nothing on model failure", async () =>
   const gate = new Promise<void>((r) => (release = r));
   const runner = new ExtractionRunner(
     pool,
-    {
-      discover: async () => {
+    taskModel({
+      partition: async () => {
         await gate;
         throw Error("provider failed");
       },
-      select: async () => [],
-    },
+    }),
     65536,
   );
   const first = await runner.start(p.project_id, request);
@@ -188,13 +207,13 @@ it("marks a pending run interrupted on startup and leaves original data readable
   const gate = new Promise<void>((r) => (release = r));
   const runner = new ExtractionRunner(
     pool,
-    {
-      discover: async () => {
+    taskModel({
+      partition: async (events) => {
         await gate;
-        return [{ description: "g" }];
+        const query = events.find((event) => event.kind === "query")!;
+        return { task_threads: [{ thread_id: "T1", title: "g", desired_outcome: "g", include_topics: [], exclude_topics: [], boundary_note: "g" }], query_assignments: [{ query_ref: query.ref, thread_ids: ["T1"], role: "origin" }], relations: [] };
       },
-      select: async (_g, es) => es.map((e) => e.ref),
-    },
+    }),
     65536,
   );
   const started = await runner.start(p.project_id, request);

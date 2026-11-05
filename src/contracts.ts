@@ -42,14 +42,62 @@ export interface IngestAck {
   next_offset: number;
   records: { offset: number; raw_ref: string; event_refs: string[] }[];
 }
-export interface Goal {
-  description: string;
+export type QueryRole =
+  | "origin"
+  | "continuation"
+  | "constraint"
+  | "correction"
+  | "status"
+  | "authorization"
+  | "retrospective"
+  | "compound"
+  | "unrelated"
+  | "unresolved";
+export interface TaskThread {
+  thread_id: string;
+  title: string;
+  desired_outcome: string;
+  include_topics: string[];
+  exclude_topics: string[];
+  boundary_note: string;
+}
+export interface QueryAssignment {
+  query_ref: string;
+  thread_ids: string[];
+  role: QueryRole;
+  reason?: string;
+}
+export type TaskRelationKind = "depends_on" | "continues" | "supersedes";
+export interface TaskRelation {
+  from_thread_id: string;
+  relation: TaskRelationKind;
+  to_thread_id: string;
+  evidence_refs: string[];
+  reason: string;
+}
+export interface TaskPartition {
+  task_threads: TaskThread[];
+  query_assignments: QueryAssignment[];
+  relations: TaskRelation[];
+}
+export interface EvidenceCoverage {
+  constraints_and_corrections: string[];
+  diagnosis_and_failures: string[];
+  decision: string[];
+  implementation: string[];
+  verification: string[];
+  final_state: string[];
+}
+export interface EpisodeSelection {
+  event_refs: string[];
+  evidence_coverage: EvidenceCoverage;
 }
 export interface EpisodeDraft {
-  goal: Goal;
+  thread: TaskThread;
   event_refs: string[];
   chunk_id: string;
   missing_pair_refs: string[];
+  evidence_coverage: EvidenceCoverage;
 }
 export class HttpError extends Error {
   constructor(
