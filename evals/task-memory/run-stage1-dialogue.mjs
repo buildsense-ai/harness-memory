@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
 import { CompatibleChatModel } from '../../dist/src/extraction/model.js';
 import { orderedDialogue } from './ordered-dialogue.mjs';
 
