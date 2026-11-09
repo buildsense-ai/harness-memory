@@ -1,9 +1,10 @@
 import hashlib
 import json
+import os
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(os.environ.get('EVAL_WORKSPACE', Path(__file__).resolve().parent))
 
 
 def read(p):

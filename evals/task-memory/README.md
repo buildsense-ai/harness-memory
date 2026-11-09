@@ -41,3 +41,19 @@ The Python verifier checks source pointers, candidate membership, tool pairing,
 raw response fidelity, and Episode references. Semantic review additionally
 compares the documents with the complete original events. Mechanical checks do
 not establish semantic correctness or downstream task success.
+
+## Evidence-fidelity revision (2026-11-09)
+
+The current runner reads `memory-prompt.txt` directly. Stage 1 additionally assigns
+a later turn to earlier tasks when its dialogue explicitly corrects, retracts,
+verifies or updates their material conclusions; shared subject matter alone is
+insufficient. Stage 2 preserves speaker, uncertainty, conflicting evidence and
+completion state, including in titles. Output schema and Markdown skeleton stay
+unchanged; there is no extra selection/review stage inside generation.
+
+Build the current checkout, set `PROBE_REPO` to it, and set `EVAL_WORKSPACE` to a
+fresh private directory containing the same two source files. Run
+`node evals/task-memory/run-validation.mjs`. This writes a provenance record and
+refuses to overwrite an existing run. The review and Python verifier also accept
+`EVAL_WORKSPACE`. Keep old baseline artifacts unchanged. Do not publish private
+logs or generated memories to this public repository.
