@@ -1,5 +1,4 @@
 import {
-  assert,
   type EvidenceCoverage,
   type EpisodeDraft,
   type EpisodeSelection,
@@ -10,6 +9,7 @@ import {
   type TaskThread,
 } from "../contracts.js";
 import { bisect, completeSelection, toolPairs } from "./chunk.js";
+import { appendOutputRetry, isObject, readToolOutput, requireValid, schemaIssues, type OutputIssue } from "./output.js";
 
 export interface ChatModel {
   partition(events: StoredEvent[]): Promise<TaskPartition>;
@@ -185,64 +185,96 @@ function checkBudget(payload: unknown, budget: number) {
 }
 
 function validatePartition(value: TaskPartition, events: StoredEvent[]) {
-  assert(value && Array.isArray(value.task_threads), "invalid task_threads", 422);
-  assert(Array.isArray(value.query_assignments), "invalid query_assignments", 422);
-  assert(Array.isArray(value.relations), "invalid relations", 422);
-  const threadIds = new Set(value.task_threads.map((thread) => thread.thread_id));
-  assert(threadIds.size === value.task_threads.length, "duplicate thread_id", 422);
-  assert([...threadIds].every((id) => typeof id === "string" && id.trim()), "empty thread_id", 422);
-  for (const thread of value.task_threads) {
-    for (const field of ["title", "desired_outcome", "boundary_note"] as const)
-      assert(typeof thread[field] === "string" && thread[field].trim(), `invalid ${field}`, 422);
-    for (const field of ["include_topics", "exclude_topics"] as const)
-      assert(Array.isArray(thread[field]) && thread[field].every((item) => typeof item === "string"), `invalid ${field}`, 422);
-  }
-  const queryRefs = events.filter((event) => event.kind === "query").map((event) => event.ref);
-  const queryRefSet = new Set(queryRefs);
-  const assignmentCounts = new Map<string, number>();
-  for (const assignment of value.query_assignments) {
-    assignmentCounts.set(assignment.query_ref, (assignmentCounts.get(assignment.query_ref) ?? 0) + 1);
-    assert(queryRefSet.has(assignment.query_ref), "assignment references unknown/non-query event", 422);
-    assert(Array.isArray(assignment.thread_ids), "invalid assignment thread_ids", 422);
-    assert(assignment.thread_ids.every((id) => threadIds.has(id)), "assignment references unknown thread", 422);
-    assert(!new Set(assignment.thread_ids).size || new Set(assignment.thread_ids).size === assignment.thread_ids.length, "duplicate assignment thread", 422);
-    assert(["origin", "continuation", "constraint", "correction", "status", "authorization", "retrospective", "compound", "unrelated", "unresolved"].includes(assignment.role), "invalid assignment role", 422);
-    if (["unrelated", "unresolved"].includes(assignment.role)) assert(assignment.thread_ids.length === 0, "unrelated/unresolved assignment must not point to a thread", 422);
-    else assert(assignment.thread_ids.length > 0, "assigned query has no task thread", 422);
-    if (["compound", "authorization", "retrospective", "correction", "unrelated", "unresolved"].includes(assignment.role))
-      assert(typeof assignment.reason === "string" && assignment.reason.trim(), "assignment reason required", 422);
-  }
-  for (const ref of queryRefs) assert(assignmentCounts.get(ref) === 1, `query must have exactly one assignment: ${ref}`, 422);
-  assert(value.query_assignments.length === queryRefs.length, "unexpected query assignment", 422);
-  const assignedThreadIds = new Set(value.query_assignments.flatMap((assignment) => assignment.thread_ids));
-  assert([...threadIds].every((id) => assignedThreadIds.has(id)), "task thread has no assigned query", 422);
-
-  const evidenceRefs = new Set(events.filter((event) => event.kind === "query" || event.kind === "message").map((event) => event.ref));
+  const issues = schemaIssues(value, partitionTool.function.parameters);
+  const add = (path: string, code: string, message: string, received?: unknown, allowed_ref_set?: string) =>
+    issues.push({ path, code, message, received, ...(allowed_ref_set ? { allowed_ref_set } : {}) });
+  const root: Record<string, any> = isObject(value) ? value : {};
+  const threads: unknown[] = Array.isArray(root.task_threads) ? root.task_threads : [];
+  const assignments: unknown[] = Array.isArray(root.query_assignments) ? root.query_assignments : [];
+  const relations: unknown[] = Array.isArray(root.relations) ? root.relations : [];
+  const threadIds = new Set<string>();
+  threads.forEach((thread, i) => {
+    if (!isObject(thread)) return;
+    for (const field of ["thread_id", "title", "desired_outcome", "boundary_note"]) {
+      if (typeof thread[field] === "string" && !thread[field].trim()) add(`/task_threads/${i}/${field}`, "empty_string", `invalid ${field}: must not be blank`);
+    }
+    if (typeof thread.thread_id !== "string" || !thread.thread_id.trim()) return;
+    if (threadIds.has(thread.thread_id)) add(`/task_threads/${i}/thread_id`, "duplicate_thread_id", "duplicate thread_id", thread.thread_id);
+    threadIds.add(thread.thread_id);
+  });
+  const queryRefs = events.filter(e => e.kind === "query").map(e => e.ref), queries = new Set(queryRefs);
+  const evidenceRefs = events.filter(e => e.kind === "query" || e.kind === "message").map(e => e.ref), evidence = new Set(evidenceRefs);
+  const counts = new Map<string, number>(), assigned = new Set<string>();
+  assignments.forEach((a, i) => {
+    if (!isObject(a)) return;
+    const p = `/query_assignments/${i}`;
+    if (typeof a.query_ref === "string") {
+      counts.set(a.query_ref, (counts.get(a.query_ref) ?? 0) + 1);
+      if (!queries.has(a.query_ref)) add(p + "/query_ref", "unknown_query_ref", "assignment references unknown/non-query event; copy an input query ref exactly", a.query_ref, "query_refs");
+      else if (counts.get(a.query_ref)! > 1) add(p + "/query_ref", "duplicate_query_assignment", "query must have exactly one assignment", a.query_ref);
+    }
+    if (Array.isArray(a.thread_ids)) {
+      const seen = new Set();
+      a.thread_ids.forEach((id, j) => {
+        if (typeof id !== "string") return;
+        if (!threadIds.has(id)) add(`${p}/thread_ids/${j}`, "unknown_thread_id", "assignment references unknown thread", id, "thread_ids");
+        if (seen.has(id)) add(`${p}/thread_ids/${j}`, "duplicate_assignment_thread", "duplicate assignment thread", id);
+        seen.add(id);
+        if (queries.has(a.query_ref) && !["unrelated", "unresolved"].includes(a.role)) assigned.add(id);
+      });
+      const unassigned = ["unrelated", "unresolved"].includes(a.role);
+      if (unassigned && a.thread_ids.length) add(p + "/thread_ids", "unassigned_role_has_threads", "unrelated/unresolved assignment must not point to a thread");
+      else if (!unassigned && !a.thread_ids.length) add(p + "/thread_ids", "empty_thread_assignment", "assigned query has no task thread");
+    }
+    if (["compound", "authorization", "retrospective", "correction", "unrelated", "unresolved"].includes(a.role) && !(typeof a.reason === "string" && a.reason.trim()))
+      add(p + "/reason", "missing_assignment_reason", "assignment reason required for this role");
+  });
+  for (const ref of queryRefs) if (!counts.has(ref)) add("/query_assignments", "missing_query_assignment", `query must have exactly one assignment: ${ref}`, ref, "query_refs");
+  threads.forEach((thread, i) => {
+    if (isObject(thread) && typeof thread.thread_id === "string" && thread.thread_id.trim() && !assigned.has(thread.thread_id))
+      add(`/task_threads/${i}/thread_id`, "unassigned_thread", "task thread has no assigned query", thread.thread_id);
+  });
   const relationKeys = new Set<string>();
-  for (const relation of value.relations) {
-    assert(threadIds.has(relation.from_thread_id) && threadIds.has(relation.to_thread_id), "relation references unknown thread", 422);
-    assert(relation.from_thread_id !== relation.to_thread_id, "relation cannot be a self-loop", 422);
-    assert(["depends_on", "continues", "supersedes"].includes(relation.relation), "invalid relation kind", 422);
-    assert(Array.isArray(relation.evidence_refs) && relation.evidence_refs.length > 0 && relation.evidence_refs.every((ref) => evidenceRefs.has(ref)), "invalid relation evidence", 422);
-    assert(typeof relation.reason === "string" && relation.reason.trim(), "relation reason required", 422);
-    const key = `${relation.from_thread_id}|${relation.relation}|${relation.to_thread_id}`;
-    assert(!relationKeys.has(key), "duplicate relation", 422);
+  relations.forEach((r, i) => {
+    if (!isObject(r)) return;
+    const p = `/relations/${i}`;
+    for (const field of ["from_thread_id", "to_thread_id"]) if (typeof r[field] === "string" && !threadIds.has(r[field]))
+      add(p + "/" + field, "unknown_thread_id", "relation references unknown thread", r[field], "thread_ids");
+    if (typeof r.from_thread_id === "string" && r.from_thread_id === r.to_thread_id) add(p, "self_relation", "relation cannot be a self-loop");
+    if (Array.isArray(r.evidence_refs)) r.evidence_refs.forEach((ref, j) => {
+      if (typeof ref === "string" && !evidence.has(ref)) add(`${p}/evidence_refs/${j}`, "unknown_evidence_ref", "invalid relation evidence: expected an input query/message ref", ref, "evidence_refs");
+    });
+    if (typeof r.reason === "string" && !r.reason.trim()) add(p + "/reason", "empty_relation_reason", "relation reason required");
+    const key = JSON.stringify([r.from_thread_id, r.relation, r.to_thread_id]);
+    if (relationKeys.has(key)) add(p, "duplicate_relation", "duplicate relation");
     relationKeys.add(key);
-  }
+  });
+  const references: Record<string, string[]> = {};
+  if (issues.some(i => i.allowed_ref_set === "query_refs")) references.query_refs = queryRefs;
+  if (issues.some(i => i.allowed_ref_set === "thread_ids")) references.thread_ids = [...threadIds];
+  if (issues.some(i => i.allowed_ref_set === "evidence_refs")) references.evidence_refs = evidenceRefs;
+  requireValid(issues, references);
 }
 
 function validateSelection(value: EpisodeSelection, events: StoredEvent[], assignments: QueryAssignment[]) {
-  assert(value && Array.isArray(value.event_refs), "invalid event_refs", 422);
-  assert(value.evidence_coverage && typeof value.evidence_coverage === "object", "invalid evidence_coverage", 422);
+  const issues: OutputIssue[] = schemaIssues(value, selectionTool.function.parameters);
   const refs = new Set(events.map((event) => event.ref));
-  assert(value.event_refs.every((ref) => refs.has(ref)), "selection references unknown event", 422);
-  assert(new Set(value.event_refs).size === value.event_refs.length, "duplicate selected event", 422);
-  const selected = new Set(value.event_refs);
-  for (const assignment of assignments) assert(selected.has(assignment.query_ref), `missing task query anchor: ${assignment.query_ref}`, 422);
-  for (const key of coverageKeys) {
-    const category = value.evidence_coverage[key];
-    assert(Array.isArray(category) && category.every((ref) => selected.has(ref)), `invalid evidence_coverage.${key}`, 422);
+  const root: Record<string, any> = isObject(value) ? value : {};
+  const selected = new Set<string>();
+  if (Array.isArray(root.event_refs)) root.event_refs.forEach((ref, i) => {
+    if (typeof ref !== "string") return;
+    if (!refs.has(ref)) issues.push({ path: `/event_refs/${i}`, code: "unknown_event_ref", message: "selection references unknown event", received: ref, allowed_ref_set: "event_refs" });
+    if (selected.has(ref)) issues.push({ path: `/event_refs/${i}`, code: "duplicate_event_ref", message: "duplicate selected event", received: ref });
+    selected.add(ref);
+  });
+  for (const a of assignments) if (!selected.has(a.query_ref)) issues.push({ path: "/event_refs", code: "missing_query_anchor", message: `missing task query anchor: ${a.query_ref}`, received: a.query_ref });
+  if (isObject(root.evidence_coverage)) for (const key of coverageKeys) {
+    const category = root.evidence_coverage[key];
+    if (Array.isArray(category)) category.forEach((ref, i) => {
+      if (typeof ref === "string" && (!refs.has(ref) || !selected.has(ref))) issues.push({ path: `/evidence_coverage/${key}/${i}`, code: "unselected_evidence_ref", message: `invalid evidence_coverage.${key}: must reference a selected source event`, received: ref, allowed_ref_set: "selected_event_refs" });
+    });
   }
+  requireValid(issues, issues.length ? { event_refs: [...refs], selected_event_refs: [...selected].filter(ref => refs.has(ref)) } : {});
 }
 
 function combinePartitions(parts: { partition: TaskPartition; chunk: string }[]): TaskPartition {
@@ -373,20 +405,13 @@ export class CompatibleChatModel implements ChatModel {
         if ([400, 413].includes(response.status) && /context_length_exceeded|maximum context length|input.*exceeds.*limit|prompt.*too long/i.test(info)) throw new ContextTooLong();
         throw Error("model request failed: HTTP " + response.status);
       }
-      const message = data.choices?.[0]?.message;
-      const call = message?.tool_calls?.find((item: any) => item.function?.name === tool.function.name);
-      if (!call) {
-        if (attempt === 2) throw Error("model did not call the required output tool");
-        messages.push({ role: "assistant", content: message?.content ?? "" }, { role: "user", content: `VALIDATOR_ERROR: Call ${tool.function.name} and return the complete result.` });
-        continue;
-      }
       try {
-        const value = JSON.parse(call.function.arguments) as T;
+        const value = readToolOutput(data, tool.function.name) as T;
         validate(value);
         return value;
       } catch (error) {
         if (attempt === 2) throw error;
-        messages.push(message, { role: "tool", tool_call_id: call.id, content: JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "invalid output", instruction: "Correct the issue and resubmit the complete result." }) });
+        appendOutputRetry(messages, data.choices?.[0]?.message, error, tool.function.name);
       }
     }
     throw Error("model output retry exhausted");

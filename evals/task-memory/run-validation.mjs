@@ -10,12 +10,13 @@ const root = path.resolve(process.env.EVAL_WORKSPACE ?? scriptRoot);
 const repo = path.resolve(process.env.PROBE_REPO ?? path.join(scriptRoot, '../..'));
 const { projectRecord } = await import(pathToFileURL(path.join(repo, 'dist/src/adapters/index.js')));
 const { CompatibleChatModel } = await import(pathToFileURL(path.join(repo, 'dist/src/extraction/model.js')));
+const { appendOutputRetry, outputFeedback, readToolOutput } = await import(pathToFileURL(path.join(repo, 'dist/src/extraction/output.js')));
+const { memoryTool, validateMemoryDocument } = await import(pathToFileURL(path.join(repo, 'dist/src/extraction/memory-output.js')));
 const hash = x => crypto.createHash('sha256').update(x).digest('hex');
 const save = (p, x) => fs.writeFileSync(p, typeof x === 'string' ? x : JSON.stringify(x, null, 2));
 const baseConfig = {baseUrl:process.env.MODEL_BASE_URL,key:process.env.MODEL_API_KEY,model:process.env.MODEL_NAME,maxOutputTokens:60000};
 if (!baseConfig.baseUrl || !baseConfig.key || !baseConfig.model) throw Error('Missing model config');
 const memoryPrompt = fs.readFileSync(path.join(scriptRoot, 'memory-prompt.txt'), 'utf8').trim();
-const memoryTool = {type:'function',function:{name:'submit_memory_document',description:'提交唯一的 Markdown 任务记忆正文。',parameters:{type:'object',additionalProperties:false,required:['markdown'],properties:{markdown:{type:'string'}}}}};
 const files = ['code', 'noncode'];
 const realFetch = globalThis.fetch;
 if (fs.existsSync(path.join(root,'run-provenance.json'))) throw Error('Use a fresh EVAL_WORKSPACE; do not overwrite a prior run');
@@ -26,6 +27,8 @@ save(path.join(root,'run-provenance.json'), {
   script_sha256:hash(fs.readFileSync(fileURLToPath(import.meta.url))),
   memory_prompt_sha256:hash(memoryPrompt),
   partition_module_sha256:hash(fs.readFileSync(path.join(repo,'dist/src/extraction/model.js'))),
+  output_validation_module_sha256:hash(fs.readFileSync(path.join(repo,'dist/src/extraction/output.js'))),
+  memory_validation_module_sha256:hash(fs.readFileSync(path.join(repo,'dist/src/extraction/memory-output.js'))),
   source_sha256:Object.fromEntries(files.map(label=>[label,hash(fs.readFileSync(path.join(root,label+'.raw.jsonl')))])),
 });
 
@@ -68,23 +71,18 @@ async function generate(outDir, candidate) {
     const data=await resp.json();
     const callTrace={request,response:data,http_status:resp.status,elapsed_ms:Date.now()-start};calls.push(callTrace);save(path.join(outDir,'generation-calls.json'),calls);
     if(!resp.ok)throw Error('Generation HTTP '+resp.status);
-    const msg=data.choices?.[0]?.message,call=msg?.tool_calls?.find(t=>t.function?.name==='submit_memory_document');
+    const msg=data.choices?.[0]?.message;
     let error;
     try{
-      if(!call)throw Error('Missing submit_memory_document tool call');
-      const result=JSON.parse(call.function.arguments);
-      if(typeof result.markdown!=='string'||!result.markdown.trim().startsWith('# '))throw Error('Missing Markdown title/body');
-      if(Object.keys(result).some(k=>k!=='markdown'))throw Error('Unexpected output field');
-      if(/^## source_refs/m.test(result.markdown))throw Error('source_refs are appended by code, not the model');
-      const headings=[...result.markdown.matchAll(/^## (.+)$/gm)].map(m=>m[1]);
-      if(headings.some(h=>!['背景','发生了什么','判断与处理','结果与待确认'].includes(h)))throw Error('Unexpected H2 skeleton');
+      const submitted=readToolOutput(data,memoryTool.function.name);
+      const {markdown,headings}=validateMemoryDocument(submitted);
+      const result={markdown};
       save(path.join(outDir,'model-output.json'),result);
       save(path.join(outDir,'memory.md'),result.markdown.trim()+'\n\n## source_refs\n- episode_id: `'+candidate.episode_id+'`\n');
       return {characters:result.markdown.length,attempts:calls.length,usage:calls.map(c=>c.response.usage),headings};
-    }catch(e){error=e.message;callTrace.validation_error=error;save(path.join(outDir,'generation-calls.json'),calls);}
-    if(attempt===2)throw Error(error);
-    if(call) messages.push(msg,{role:'tool',tool_call_id:call.id,content:JSON.stringify({ok:false,error,instruction:'Correct the format and submit the complete Markdown document.'})});
-    else messages.push({...msg,role:'assistant'},{role:'user',content:'FORMAT_ERROR: '+error+'. Submit the complete body with submit_memory_document.'});
+    }catch(e){error=e;callTrace.validation_error=e.message;callTrace.validation_feedback=outputFeedback(e,memoryTool.function.name);save(path.join(outDir,'generation-calls.json'),calls);}
+    if(attempt===2)throw error;
+    appendOutputRetry(messages,msg,error,memoryTool.function.name);
   }
 }
 
