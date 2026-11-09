@@ -90,3 +90,13 @@ and its adjacent aggregate/hash JSON. Three original trials passed; current
 development failed ref validation. A separately recorded diagnostic format
 repair succeeded without changing its semantic partition. Source-based review
 still found missed backward correction assignments and attribution issues.
+
+## Output validation feedback
+
+The current [validation/retry change](validation-feedback.md) reports schema
+and source-ref errors together with their exact paths and permitted reference
+sets. Direct Markdown generation uses the same tool-protocol feedback path;
+missing required fields remain rejected without wrapper extraction or content
+repair. See [regression and live repair results](results-validation-feedback-20261109.md).
+Both known historical failures repaired on their first live retry; the Stage 2
+body was unchanged. These seeded replays do not measure fresh-generation success.

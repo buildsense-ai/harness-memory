@@ -1,0 +1,332 @@
+{
+  "revision": "417e94b87435e592d83f8f83dd7ad04dc1691044",
+  "production_switched": false,
+  "ci": {
+    "url": "https://github.com/buildsense-ai/harness-memory/actions/runs/42627942704",
+    "tests": 55,
+    "python_tests": 4,
+    "build": "passed"
+  },
+  "historical_document_checks": [
+    {
+      "path": "saturday-memory-validation-20261108/code/T1",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261108/code/T2",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261108/code/T3",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261108/code/T4",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261108/noncode/T1",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261108/noncode/T2",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261109-context-purpose-v1/code/image-lane-streaming-architecture",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261109-context-purpose-v1/code/img-skill-102-usability-test",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261109-context-purpose-v1/code/skillhub-precheck-block-and-zip-deploy",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261109-context-purpose-v1/noncode/T1",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261109-context-purpose-v1/noncode/T2",
+      "status": "passed"
+    },
+    {
+      "path": "saturday-memory-validation-20261109-context-purpose-v1/noncode/T3",
+      "status": "passed"
+    },
+    {
+      "path": "context-purpose-v1/replay-60k",
+      "status": "passed"
+    }
+  ],
+  "all_historical_documents_valid": true,
+  "historical_failures": [
+    {
+      "attempt": 1,
+      "feedback": {
+        "ok": false,
+        "error": "output_validation_failed",
+        "required_tool": "submit_memory_document",
+        "issues": [
+          {
+            "path": "/",
+            "code": "output_truncated",
+            "message": "Output token limit reached; resubmit a complete result within the output budget."
+          },
+          {
+            "path": "/",
+            "code": "invalid_json",
+            "message": "Invalid tool-argument JSON: Unterminated string in JSON at position 8903 (line 1 column 8904)"
+          }
+        ],
+        "issue_count": 2,
+        "omitted_issue_count": 0,
+        "reference_sets": {},
+        "instruction": "Correct every reported issue and resubmit the complete result through the required tool. Copy source IDs exactly from the input. Do not invent, omit required content, or return only a patch."
+      }
+    },
+    {
+      "attempt": 2,
+      "feedback": {
+        "ok": false,
+        "error": "output_validation_failed",
+        "required_tool": "submit_memory_document",
+        "issues": [
+          {
+            "path": "/markdown",
+            "code": "schema_required",
+            "message": "must have required property 'markdown'",
+            "expected": {
+              "missingProperty": "markdown"
+            }
+          },
+          {
+            "path": "/arguments",
+            "code": "schema_additionalProperties",
+            "message": "must NOT have additional properties",
+            "expected": {
+              "additionalProperty": "arguments"
+            }
+          }
+        ],
+        "issue_count": 2,
+        "omitted_issue_count": 0,
+        "reference_sets": {},
+        "instruction": "Correct every reported issue and resubmit the complete result through the required tool. Copy source IDs exactly from the input. Do not invent, omit required content, or return only a patch."
+      }
+    },
+    {
+      "attempt": 3,
+      "feedback": {
+        "ok": false,
+        "error": "output_validation_failed",
+        "required_tool": "submit_memory_document",
+        "issues": [
+          {
+            "path": "/markdown",
+            "code": "schema_required",
+            "message": "must have required property 'markdown'",
+            "expected": {
+              "missingProperty": "markdown"
+            }
+          },
+          {
+            "path": "/arguments",
+            "code": "schema_additionalProperties",
+            "message": "must NOT have additional properties",
+            "expected": {
+              "additionalProperty": "arguments"
+            }
+          }
+        ],
+        "issue_count": 2,
+        "omitted_issue_count": 0,
+        "reference_sets": {},
+        "instruction": "Correct every reported issue and resubmit the complete result through the required tool. Copy source IDs exactly from the input. Do not invent, omit required content, or return only a patch."
+      }
+    }
+  ],
+  "live_repairs": {
+    "kind": "historical failures seeded into the current retry loop, not fresh-generation success rates",
+    "stage1": {
+      "status": "completed",
+      "live_calls": 1,
+      "only_query_refs_changed": false,
+      "threads": [
+        "实测最新生图 skill（image-generation 1.0.2）是否可用",
+        "排查并修复第三方生图 400（unsupported_parameter/stream）：relay 严格 marker + skill stream:false",
+        "确认生图 skill 的名称与身份",
+        "处理 skill 发布预检卡住与是否手动上传 zip 的决策"
+      ],
+      "usage": [
+        {
+          "prompt_tokens": 41680,
+          "completion_tokens": 2275,
+          "total_tokens": 43955,
+          "prompt_tokens_details": {
+            "cached_tokens": 21760
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 17
+          },
+          "prompt_cache_hit_tokens": 21760,
+          "prompt_cache_miss_tokens": 19920
+        }
+      ],
+      "feedback": {
+        "ok": false,
+        "error": "output_validation_failed",
+        "required_tool": "submit_task_partition",
+        "issues": [
+          {
+            "path": "/query_assignments/3/query_ref",
+            "code": "unknown_query_ref",
+            "message": "assignment references unknown/non-query event; copy an input query ref exactly",
+            "received": "evt_probe_0fb10a557f9322dc00cfec70",
+            "allowed_ref_set": "query_refs"
+          },
+          {
+            "path": "/query_assignments/4/query_ref",
+            "code": "unknown_query_ref",
+            "message": "assignment references unknown/non-query event; copy an input query ref exactly",
+            "received": "evt_probe_18ec92718279231135b6dfac",
+            "allowed_ref_set": "query_refs"
+          },
+          {
+            "path": "/query_assignments",
+            "code": "missing_query_assignment",
+            "message": "query must have exactly one assignment: evt_dialogue_0fb10a557f9322dc00cfec70",
+            "received": "evt_dialogue_0fb10a557f9322dc00cfec70",
+            "allowed_ref_set": "query_refs"
+          },
+          {
+            "path": "/query_assignments",
+            "code": "missing_query_assignment",
+            "message": "query must have exactly one assignment: evt_dialogue_18ec92718279231135b6dfac",
+            "received": "evt_dialogue_18ec92718279231135b6dfac",
+            "allowed_ref_set": "query_refs"
+          },
+          {
+            "path": "/task_threads/2/thread_id",
+            "code": "unassigned_thread",
+            "message": "task thread has no assigned query",
+            "received": "T3"
+          }
+        ],
+        "issue_count": 5,
+        "omitted_issue_count": 0,
+        "reference_sets": {
+          "query_refs": [
+            "evt_probe_78739cd69952e3dca1523c8d",
+            "evt_probe_ffbe26ebe7ad17fa7023bba7",
+            "evt_probe_3687b68efbf00c5c7963f585",
+            "evt_dialogue_0fb10a557f9322dc00cfec70",
+            "evt_dialogue_18ec92718279231135b6dfac",
+            "evt_probe_1c8fe25714b2bb8c6a879615",
+            "evt_probe_94c06130ddd60fe60f66b143",
+            "evt_probe_db43b609593a70d9e16c7d8d",
+            "evt_probe_1734a908349fbbdb55168c49",
+            "evt_probe_4527032fadf13822258fd180",
+            "evt_probe_4104b5491b8b50ed263a970e",
+            "evt_probe_70daa5f2c7212f519ebd5a57"
+          ]
+        },
+        "instruction": "Correct every reported issue and resubmit the complete result through the required tool. Copy source IDs exactly from the input. Do not invent, omit required content, or return only a patch."
+      },
+      "candidate_membership_unchanged": true,
+      "extra_query_assignments": [
+        {
+          "query_ref": "evt_dialogue_18ec92718279231135b6dfac",
+          "thread_id": "T3"
+        }
+      ]
+    },
+    "stage2": {
+      "status": "completed",
+      "live_calls": 1,
+      "headings": [
+        "背景",
+        "发生了什么",
+        "判断与处理",
+        "结果与待确认"
+      ],
+      "characters": 11709,
+      "usage": [
+        {
+          "prompt_tokens": 121683,
+          "completion_tokens": 5952,
+          "total_tokens": 127635,
+          "prompt_tokens_details": {
+            "cached_tokens": 114944
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 127
+          },
+          "prompt_cache_hit_tokens": 114944,
+          "prompt_cache_miss_tokens": 6739
+        }
+      ],
+      "feedback": {
+        "ok": false,
+        "error": "output_validation_failed",
+        "required_tool": "submit_memory_document",
+        "issues": [
+          {
+            "path": "/markdown",
+            "code": "schema_required",
+            "message": "must have required property 'markdown'",
+            "expected": {
+              "missingProperty": "markdown"
+            }
+          },
+          {
+            "path": "/arguments",
+            "code": "schema_additionalProperties",
+            "message": "must NOT have additional properties",
+            "expected": {
+              "additionalProperty": "arguments"
+            }
+          }
+        ],
+        "issue_count": 2,
+        "omitted_issue_count": 0,
+        "reference_sets": {},
+        "instruction": "Correct every reported issue and resubmit the complete result through the required tool. Copy source IDs exactly from the input. Do not invent, omit required content, or return only a patch."
+      },
+      "markdown_identical_to_historical_wrapped_body": true,
+      "body_sha256": "6ff2d6c62933cd6049ae2e199b617c620c99aae5282518ff05493d687df54969"
+    }
+  },
+  "provenance": {
+    "kind": "seeded historical failure followed by live repair, not fresh-generation success measurement",
+    "model": "deepseek-flash",
+    "thinking": {
+      "type": "enabled"
+    },
+    "max_tokens": 60000,
+    "revision": "417e94b87435e592d83f8f83dd7ad04dc1691044",
+    "script_sha256": "261b482ef04f7715f97df96f149283f279fa9474e0ee5cf44cd669f0bb1f665c",
+    "seed_sha256": {
+      "stage1-failure.json": "2a6e0f9fbcb0da8c6c1b3894d1cecc97169f5ca5f60fce942bc1133d3fea4764",
+      "stage2-failure.json": "5b9b3f0dd4f0a785d0194d7592566288b0777d91ede8c2afff0978a940367045",
+      "code.ordered-dialogue.json": "fa768a31abb7b9c0771fc563244274ae27b6a10821d4c7a306da4ff61d1d448a"
+    },
+    "production_write": false
+  },
+  "remote_artifacts_verified": 11,
+  "artifact_hashes": {
+    "code.ordered-dialogue.json": "fa768a31abb7b9c0771fc563244274ae27b6a10821d4c7a306da4ff61d1d448a",
+    "provenance.json": "fadb4edcafb97da368d673eb52625c67ef48cadf32a0138277390a1d8a9c084e",
+    "stage1-calls.json": "7bbaaee5237c3624e260916991653059ec7918511d18dd299ba16aba61bf6abd",
+    "stage1-failure.json": "2a6e0f9fbcb0da8c6c1b3894d1cecc97169f5ca5f60fce942bc1133d3fea4764",
+    "stage1-output.json": "ef2be278a54ea0dbdb8aa4f5d4967498fb1bbe3be884ba11a5a719727188a478",
+    "stage1-result.json": "6a7ab276028618aa80eb09babfa1540f35c87b10aa9e95be924fe8314da1c405",
+    "stage2-calls.json": "c8ff3f49f65e6b96674eca9638706aced06fed4f21e9210dd12deb5a42951601",
+    "stage2-failure.json": "5b9b3f0dd4f0a785d0194d7592566288b0777d91ede8c2afff0978a940367045",
+    "stage2-memory.md": "6ff2d6c62933cd6049ae2e199b617c620c99aae5282518ff05493d687df54969",
+    "stage2-output.json": "c9cd4c3531d072d0f5960ef0f9313692a7395f4b32c3080659507a316b68dfdb",
+    "stage2-result.json": "ba026c24e7aec85ee6cee8db53d5dad1ee87d2cc0ee3fb8fe1e531925069d96b"
+  }
+}
