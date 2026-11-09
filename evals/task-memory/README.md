@@ -41,3 +41,13 @@ The Python verifier checks source pointers, candidate membership, tool pairing,
 raw response fidelity, and Episode references. Semantic review additionally
 compares the documents with the complete original events. Mechanical checks do
 not establish semantic correctness or downstream task success.
+
+## Current experiment: context-purpose-v1
+
+See [the frozen revision notes](revision-context-purpose-v1.md) for the approved
+prompt hashes and evaluation boundary. The runner still uses the repository's
+Stage 1 and the adjacent `memory-prompt.txt` for direct Markdown generation.
+It retains all assigned native turns, including tools, and appends one local
+Episode reference. Use a fresh `EVAL_WORKSPACE`; the runner refuses to overwrite
+an existing provenance record. This experiment is not a production pipeline
+migration or instruction to deploy an unmerged branch to the live service.
