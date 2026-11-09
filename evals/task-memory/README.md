@@ -67,3 +67,26 @@ previously failed task succeeded on its first request at the new limit. It used
 not establish that the higher budget caused success. Stage 1 was not rerun.
 An offline probe recovered the two complete, incorrectly wrapped old responses
 without rewriting their bodies; that fallback has not been added to the pipeline.
+
+## Ordered public dialogue input
+
+`ordered-dialogue.mjs` recovers every recorded public user/assistant text in
+native order from a frozen XiaoBa context file, matching the original sample's
+exact query/final-response anchors and preserving byte provenance. Tools and
+hidden thinking are excluded. Existing aggregate upload logs alone do not
+contain the missing intermediate text.
+
+`run-stage1-dialogue.mjs` compares the frozen current and original Stage 1
+prompts on the same prepared inputs. Set `EVAL_WORKSPACE` to a fresh directory
+containing `code.context.jsonl`, `noncode.context.jsonl`, the two original
+`*.snapshot.json` files and `current.request-template.json` /
+`baseline.request-template.json` (frozen system messages and tools). Configure
+the established model environment and build the checkout first. The runner
+refuses an existing experiment provenance file and does not run Stage 2 or
+write production data. Private source files must stay outside Git.
+
+See [the completed ordered-dialogue comparison](results-ordered-dialogue-20261109.md)
+and its adjacent aggregate/hash JSON. Three original trials passed; current
+development failed ref validation. A separately recorded diagnostic format
+repair succeeded without changing its semantic partition. Source-based review
+still found missed backward correction assignments and attribution issues.

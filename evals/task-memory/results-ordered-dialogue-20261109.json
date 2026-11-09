@@ -1,0 +1,1071 @@
+{
+  "evaluated_commit": "aaec587d3c0126f1f29226812c75958257b75b4c",
+  "test_framework_followup_commit": "45239b1",
+  "production_switched": false,
+  "stage2_run": false,
+  "provenance": {
+    "model": "deepseek-flash",
+    "thinking": {
+      "type": "enabled"
+    },
+    "max_tokens": 60000,
+    "run_order": [
+      "current/code",
+      "current/noncode",
+      "baseline/code",
+      "baseline/noncode"
+    ],
+    "current_prompt_commit": "fb3e6ba20826d08a2ce0f4067c062ad300eda0f0",
+    "baseline_tag": "memory-eval-20261108-baseline",
+    "run_stage2": false,
+    "format_normalization": false,
+    "production_write": false,
+    "script_sha256": "cf33ec50d1838bed3354374080d64d23f39c59350be89040f4baa61297d96c27",
+    "builder_sha256": "13496d8a8d4238a32c7ac014776e364eab94afe971a87d2ecc33df6ad07bedd0",
+    "module_sha256": "23b082b55602765bf6f58372341745660f8bc725bbb4a0cdc09fdd3f4a05333f",
+    "prompts": {
+      "current": "8309f2fa145b797ca17dd22b84f3a8bfeef371a5449d4e542c05da40b327a74e",
+      "baseline": "e7caf0f38fd72bc0a63772308ee5b182fab0b1d694412977e62b189c5fe0e676"
+    },
+    "inputs": {
+      "code": {
+        "context_sha256": "3fb0d48eb054a2da9cd0d977b9d10a862d2f254b2729350207a4e97b08193777",
+        "original_snapshot_sha256": "941841c1a1006b229a901eb3a3a51a78dc5d5e9184dd84b8de7d4923abe01de7",
+        "dialogue_payload_sha256": "51955baa069e5dd0f379cf544cc54bd3abc7b44eec6c8dca819f7828cd7e62f2"
+      },
+      "noncode": {
+        "context_sha256": "6c93bfb98fdedce0facb2300e84d392a68bd5ffd91b702c47636d7994cd3bb08",
+        "original_snapshot_sha256": "93a9a48318b39a403f0dd0320843ab414908e3ffd68d023123e75bdb3a22368e",
+        "dialogue_payload_sha256": "e2030488763bcce589b2a8dd934a44fe080852edf83a60315e02885dc303c842"
+      }
+    }
+  },
+  "analysis": {
+    "inputs": {
+      "code": {
+        "queries": 12,
+        "messages": 56,
+        "previous_queries": 10,
+        "previous_messages": 10,
+        "original_events": 278,
+        "full_events": 326,
+        "turn_sizes": {
+          "1": 38,
+          "2": 18,
+          "3": 96,
+          "4": 2,
+          "5": 8,
+          "6": 6,
+          "7": 48,
+          "8": 20,
+          "9": 22,
+          "10": 20
+        },
+        "full_turn_sizes": {
+          "1": 49,
+          "2": 20,
+          "3": 120,
+          "4": 2,
+          "5": 9,
+          "6": 7,
+          "7": 57,
+          "8": 20,
+          "9": 22,
+          "10": 20
+        },
+        "source_sha256": "3fb0d48eb054a2da9cd0d977b9d10a862d2f254b2729350207a4e97b08193777",
+        "dialogue_sha256": "51955baa069e5dd0f379cf544cc54bd3abc7b44eec6c8dca819f7828cd7e62f2"
+      },
+      "noncode": {
+        "queries": 10,
+        "messages": 22,
+        "previous_queries": 10,
+        "previous_messages": 10,
+        "original_events": 72,
+        "full_events": 84,
+        "turn_sizes": {
+          "1": 12,
+          "2": 10,
+          "3": 6,
+          "4": 6,
+          "5": 6,
+          "6": 6,
+          "7": 8,
+          "8": 6,
+          "9": 6,
+          "10": 6
+        },
+        "full_turn_sizes": {
+          "1": 14,
+          "2": 12,
+          "3": 6,
+          "4": 7,
+          "5": 7,
+          "6": 7,
+          "7": 10,
+          "8": 7,
+          "9": 7,
+          "10": 7
+        },
+        "source_sha256": "6c93bfb98fdedce0facb2300e84d392a68bd5ffd91b702c47636d7994cd3bb08",
+        "dialogue_sha256": "e2030488763bcce589b2a8dd934a44fe080852edf83a60315e02885dc303c842"
+      }
+    },
+    "runs": {
+      "current/code": {
+        "status": "failed",
+        "error": "assignment references unknown/non-query event",
+        "attempts": [
+          {
+            "attempt": 1,
+            "elapsed_ms": 65320,
+            "finish_reason": "tool_calls",
+            "usage": {
+              "prompt_tokens": 21889,
+              "completion_tokens": 11936,
+              "total_tokens": 33825,
+              "prompt_tokens_details": {
+                "cached_tokens": 1664
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 9695
+              },
+              "prompt_cache_hit_tokens": 1664,
+              "prompt_cache_miss_tokens": 20225
+            },
+            "invalid_assignments": [
+              {
+                "query_ref": "evt_probe_0fb10a557f9322dc00cfec70",
+                "thread_ids": [
+                  "T3",
+                  "T2"
+                ],
+                "role": "compound",
+                "reason": "T3：主体——直接询问我们的生图 skill 叫什么名字。T2：后续补充（矛盾判断）——同轮助手在回答名称时断言『那条报错不成立、不是我们发出的』，该判断在 Q23 轮被推翻，属对 T2 先前结论的关键更新对象。"
+              }
+            ],
+            "missing_query_refs": [
+              "evt_dialogue_0fb10a557f9322dc00cfec70"
+            ],
+            "threads": [
+              {
+                "id": "T1",
+                "title": "实测最新生图 skill（image-generation 1.0.2）是否可用",
+                "desired_outcome": "确认当前安装的生图 skill 版本、单测、真实生图与真实修图是否跑通，评估出图效果与可用性，并说清其流式/非流式调用形态与默认行为。",
+                "query_count": 2,
+                "turns": [
+                  1,
+                  2
+                ],
+                "original_events": 56,
+                "full_events": 69,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T2",
+                "title": "排查并修复第三方生图 400（unsupported_parameter/stream）：relay 严格 marker + skill stream:false",
+                "desired_outcome": "让 image-generation 调用在遇到上游『流式图片不可用』的 400 时自动降级为非流式重试并成功出图；修复主要落在 relay（严格匹配 param=stream、保留原始报错），skill 侧保留 stream:false 作为语义声明。",
+                "query_count": 8,
+                "turns": [
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9
+                ],
+                "original_events": 202,
+                "full_events": 237,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T3",
+                "title": "确认生图 skill 的名称与身份",
+                "desired_outcome": "明确生图 skill 的名称（image-generation / yii/image-generation）、目录与版本，并区分易混的其他 skill。",
+                "query_count": 0,
+                "turns": [],
+                "original_events": 0,
+                "full_events": 0,
+                "candidate_episodes_if_valid": 0
+              },
+              {
+                "id": "T4",
+                "title": "处理 skill 发布预检卡住与是否手动上传 zip 的决策",
+                "desired_outcome": "取得可复制的预检失败问题说明，并决定是等 SkillHub 预检修复还是手动用 zip 覆盖服务器上的 skill 安装。",
+                "query_count": 2,
+                "turns": [
+                  9,
+                  10
+                ],
+                "original_events": 42,
+                "full_events": 42,
+                "candidate_episodes_if_valid": 1
+              }
+            ],
+            "covered_turns": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "covered_original_events": 278,
+            "coverage": 1,
+            "extra_original_event_memberships": 22,
+            "overlap_ratio": 0.07913669064748201,
+            "extra_full_event_memberships": 22,
+            "full_overlap_ratio": 0.06748466257668712,
+            "relations": [],
+            "output_sha256": "70f0b98ebae941c4edb9374fbe7aaf5825c04f42890a62b08bff9182a067ca81"
+          },
+          {
+            "attempt": 2,
+            "elapsed_ms": 56032,
+            "finish_reason": "tool_calls",
+            "usage": {
+              "prompt_tokens": 33866,
+              "completion_tokens": 12407,
+              "total_tokens": 46273,
+              "prompt_tokens_details": {
+                "cached_tokens": 33664
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 10167
+              },
+              "prompt_cache_hit_tokens": 33664,
+              "prompt_cache_miss_tokens": 202
+            },
+            "invalid_assignments": [
+              {
+                "query_ref": "evt_probe_0fb10a557f9322dc00cfec70",
+                "thread_ids": [
+                  "T3",
+                  "T2"
+                ],
+                "role": "compound",
+                "reason": "T3：主体——直接询问我们的生图 skill 叫什么名字。T2：后续补充（矛盾判断）——同轮助手在回答名称时断言『那条报错不成立、不是我们发出的』，该判断在用户下一轮被推翻，属对 T2 先前结论的关键更新对象。"
+              }
+            ],
+            "missing_query_refs": [
+              "evt_dialogue_0fb10a557f9322dc00cfec70"
+            ],
+            "threads": [
+              {
+                "id": "T1",
+                "title": "实测最新生图 skill（image-generation 1.0.2）是否可用",
+                "desired_outcome": "确认当前安装的生图 skill 版本、单测、真实生图与真实修图是否跑通，评估出图效果与可用性，并说清其流式/非流式调用形态与默认行为。",
+                "query_count": 2,
+                "turns": [
+                  1,
+                  2
+                ],
+                "original_events": 56,
+                "full_events": 69,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T2",
+                "title": "排查并修复第三方生图 400（unsupported_parameter/stream）：relay 严格 marker + skill stream:false",
+                "desired_outcome": "让 image-generation 调用在遇到上游『流式图片不可用』的 400 时自动降级为非流式重试并成功出图；修复主要落在 relay（严格匹配 param=stream、保留原始报错），skill 侧保留 stream:false 作为语义声明。",
+                "query_count": 8,
+                "turns": [
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9
+                ],
+                "original_events": 202,
+                "full_events": 237,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T3",
+                "title": "确认生图 skill 的名称与身份",
+                "desired_outcome": "明确生图 skill 的名称（image-generation / yii/image-generation）、目录与版本，并区分易混的其他 skill。",
+                "query_count": 0,
+                "turns": [],
+                "original_events": 0,
+                "full_events": 0,
+                "candidate_episodes_if_valid": 0
+              },
+              {
+                "id": "T4",
+                "title": "处理 skill 发布预检卡住与是否手动上传 zip 的决策",
+                "desired_outcome": "取得可复制的预检失败问题说明，并决定是等 SkillHub 预检修复还是手动用 zip 覆盖服务器上的 skill 安装。",
+                "query_count": 2,
+                "turns": [
+                  9,
+                  10
+                ],
+                "original_events": 42,
+                "full_events": 42,
+                "candidate_episodes_if_valid": 1
+              }
+            ],
+            "covered_turns": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "covered_original_events": 278,
+            "coverage": 1,
+            "extra_original_event_memberships": 22,
+            "overlap_ratio": 0.07913669064748201,
+            "extra_full_event_memberships": 22,
+            "full_overlap_ratio": 0.06748466257668712,
+            "relations": [],
+            "output_sha256": "8a40cac8961520e86bd43d69e972623cf0f68b7697441329d6f834db00ee3922"
+          },
+          {
+            "attempt": 3,
+            "elapsed_ms": 94188,
+            "finish_reason": "tool_calls",
+            "usage": {
+              "prompt_tokens": 46314,
+              "completion_tokens": 19145,
+              "total_tokens": 65459,
+              "prompt_tokens_details": {
+                "cached_tokens": 46080
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 16906
+              },
+              "prompt_cache_hit_tokens": 46080,
+              "prompt_cache_miss_tokens": 234
+            },
+            "invalid_assignments": [
+              {
+                "query_ref": "evt_probe_0fb10a557f9322dc00cfec70",
+                "thread_ids": [
+                  "T3",
+                  "T2"
+                ],
+                "role": "compound",
+                "reason": "T3：主体——直接询问我们的生图 skill 叫什么名字。T2：后续补充（矛盾判断）——同轮助手在回答名称时断言『那条报错不成立、不是我们发出的』，该判断在用户下一轮被推翻，属对 T2 先前结论的关键更新对象。"
+              },
+              {
+                "query_ref": "evt_probe_18ec92718279231135b6dfac",
+                "thread_ids": [
+                  "T2"
+                ],
+                "role": "correction",
+                "reason": "T2：纠正——用户指出对方用的就是 image-generation，推翻助手上一轮『不是我们发出』的判断，触发重新排查与自我更正。"
+              }
+            ],
+            "missing_query_refs": [
+              "evt_dialogue_0fb10a557f9322dc00cfec70",
+              "evt_dialogue_18ec92718279231135b6dfac"
+            ],
+            "threads": [
+              {
+                "id": "T1",
+                "title": "实测最新生图 skill（image-generation 1.0.2）是否可用",
+                "desired_outcome": "确认当前安装的生图 skill 版本、单测、真实生图与真实修图是否跑通，评估出图效果与可用性，并说清其流式/非流式调用形态与默认行为。",
+                "query_count": 2,
+                "turns": [
+                  1,
+                  2
+                ],
+                "original_events": 56,
+                "full_events": 69,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T2",
+                "title": "排查并修复第三方生图 400（unsupported_parameter/stream）：relay 严格 marker + skill stream:false",
+                "desired_outcome": "让 image-generation 调用在遇到上游『流式图片不可用』的 400 时自动降级为非流式重试并成功出图；修复主要落在 relay（严格匹配 param=stream、保留原始报错），skill 侧保留 stream:false 作为语义声明。",
+                "query_count": 7,
+                "turns": [
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9
+                ],
+                "original_events": 202,
+                "full_events": 237,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T3",
+                "title": "确认生图 skill 的名称与身份",
+                "desired_outcome": "明确生图 skill 的名称（image-generation / yii/image-generation）、目录与版本，并区分易混的其他 skill。",
+                "query_count": 0,
+                "turns": [],
+                "original_events": 0,
+                "full_events": 0,
+                "candidate_episodes_if_valid": 0
+              },
+              {
+                "id": "T4",
+                "title": "处理 skill 发布预检卡住与是否手动上传 zip 的决策",
+                "desired_outcome": "取得可复制的预检失败问题说明，并决定是等 SkillHub 预检修复还是手动用 zip 覆盖服务器上的 skill 安装。",
+                "query_count": 2,
+                "turns": [
+                  9,
+                  10
+                ],
+                "original_events": 42,
+                "full_events": 42,
+                "candidate_episodes_if_valid": 1
+              }
+            ],
+            "covered_turns": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "covered_original_events": 278,
+            "coverage": 1,
+            "extra_original_event_memberships": 22,
+            "overlap_ratio": 0.07913669064748201,
+            "extra_full_event_memberships": 22,
+            "full_overlap_ratio": 0.06748466257668712,
+            "relations": [],
+            "output_sha256": "0c097db20ee498c7228dc633057765597787bd1027589fac1f985becba926a50"
+          }
+        ],
+        "raw_metrics_are_diagnostic_only": true
+      },
+      "baseline/code": {
+        "status": "completed",
+        "threads": 5,
+        "attempts": [
+          {
+            "attempt": 1,
+            "elapsed_ms": 45337,
+            "finish_reason": "tool_calls",
+            "usage": {
+              "prompt_tokens": 21471,
+              "completion_tokens": 7559,
+              "total_tokens": 29030,
+              "prompt_tokens_details": {
+                "cached_tokens": 1280
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 4818
+              },
+              "prompt_cache_hit_tokens": 1280,
+              "prompt_cache_miss_tokens": 20191
+            },
+            "invalid_assignments": [],
+            "missing_query_refs": [],
+            "threads": [
+              {
+                "id": "T1",
+                "title": "实测 image-generation 1.0.2 生图 skill 并验收其可用性",
+                "desired_outcome": "通过真实付费生成 + 修图的端到端测试与看图验收，判定当前版本 skill 是否可用、出图质量与成本是否达标、云端 worker 是否已适配。",
+                "query_count": 1,
+                "turns": [
+                  1
+                ],
+                "original_events": 38,
+                "full_events": 49,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T2",
+                "title": "查证 skill→relay→上游三段的流式/非流式默认行为",
+                "desired_outcome": "说清本次测试实际走的是流式还是非流式，以及每一段（skill→relay、relay→上游、relay→客户端）的默认值与是否可改。",
+                "query_count": 1,
+                "turns": [
+                  2
+                ],
+                "original_events": 18,
+                "full_events": 20,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T3",
+                "title": "定位并修复他人遇到的 400 unsupported_parameter(param: stream) 无法生图问题",
+                "desired_outcome": "确认该 400 是否出自我们这条链路，并让这类请求不再直接失败（自动降级重试或在 relay 侧固定非流式），同时保证返回给调用方的报错保持原样不被泛化。",
+                "query_count": 8,
+                "turns": [
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9
+                ],
+                "original_events": 202,
+                "full_events": 237,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T4",
+                "title": "解决 image-generation 1.0.3（stream:false）发布预检被拒并决定分发方式",
+                "desired_outcome": "拿到可直接转发的问题说明（预检拒绝原因不可见），并决定是等正式发布通道修好还是用已确认的 zip 包直接更新服务器。",
+                "query_count": 2,
+                "turns": [
+                  9,
+                  10
+                ],
+                "original_events": 42,
+                "full_events": 42,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T5",
+                "title": "确认自有生图 skill 的名称与发布 id，区分同名技能",
+                "desired_outcome": "得到我们生图 skill 的准确名字（name/目录/SkillHub id），并能区分 imagegen、image-asset-generator 等易混名称。",
+                "query_count": 1,
+                "turns": [
+                  3
+                ],
+                "original_events": 96,
+                "full_events": 120,
+                "candidate_episodes_if_valid": 1
+              }
+            ],
+            "covered_turns": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "covered_original_events": 278,
+            "coverage": 1,
+            "extra_original_event_memberships": 118,
+            "overlap_ratio": 0.4244604316546763,
+            "extra_full_event_memberships": 142,
+            "full_overlap_ratio": 0.43558282208588955,
+            "relations": [
+              {
+                "from_thread_id": "T2",
+                "relation": "continues",
+                "to_thread_id": "T1",
+                "evidence_refs": [
+                  "evt_probe_ffbe26ebe7ad17fa7023bba7"
+                ],
+                "reason": "「你用的流式还是非流式？以及默认是流式开启吗？」直接追问 T1 中刚完成的那两次实测所用模式，是对同一测试的机制追问。"
+              },
+              {
+                "from_thread_id": "T3",
+                "relation": "depends_on",
+                "to_thread_id": "T2",
+                "evidence_refs": [
+                  "evt_probe_1c8fe25714b2bb8c6a879615",
+                  "evt_probe_3687b68efbf00c5c7963f585"
+                ],
+                "reason": "用户以「错误是在 skill 到 relay 之间还是 relay 到上游之间、为啥我们没有同样问题」追问，定位报错必须依赖 T2 先建立的三段流式归属结论。"
+              },
+              {
+                "from_thread_id": "T4",
+                "relation": "depends_on",
+                "to_thread_id": "T3",
+                "evidence_refs": [
+                  "evt_probe_4104b5491b8b50ed263a970e"
+                ],
+                "reason": "「合并了243。然后是skill发布卡住那块…」把发布阻塞接在 relay 修复之后：待发布的 skill 改动就是 T3 中的 stream:false，发布决策以其修复已上线且不再阻塞为前提。"
+              }
+            ],
+            "output_sha256": "af33576ae33c217454c7ca9ec10f91d4a18c1bae08a8729fe3215d3b35be581b"
+          }
+        ],
+        "raw_metrics_are_diagnostic_only": false
+      },
+      "current/noncode": {
+        "status": "completed",
+        "threads": 3,
+        "attempts": [
+          {
+            "attempt": 1,
+            "elapsed_ms": 56091,
+            "finish_reason": "tool_calls",
+            "usage": {
+              "prompt_tokens": 21542,
+              "completion_tokens": 9563,
+              "total_tokens": 31105,
+              "prompt_tokens_details": {
+                "cached_tokens": 1664
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 7225
+              },
+              "prompt_cache_hit_tokens": 1664,
+              "prompt_cache_miss_tokens": 19878
+            },
+            "invalid_assignments": [],
+            "missing_query_refs": [],
+            "threads": [
+              {
+                "id": "T1",
+                "title": "换机时机判断与现用 vivo Y78+ 是否该换",
+                "desired_outcome": "希望判断在 2026 年手机/内存涨价行情下是否有必要现在换机、等待是否值得，并基于现用 vivo Y78+ 的实际使用状态得出该换、该修还是继续撑的结论。",
+                "query_count": 2,
+                "turns": [
+                  1,
+                  2
+                ],
+                "original_events": 22,
+                "full_events": 26,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T2",
+                "title": "2400 元内 12/16+512 机型筛选与红米 Turbo 5 / 5 Max 抉择",
+                "desired_outcome": "希望在 2400 元预算与 12G/16G+512G 存储要求下圈定可行机型，并最终在红米 Turbo 5 与 Turbo 5 Max 之间得到选择结论及下单前的核实项。",
+                "query_count": 3,
+                "turns": [
+                  1,
+                  2,
+                  3
+                ],
+                "original_events": 28,
+                "full_events": 32,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T3",
+                "title": "蓝牙耳机形态选择（半入耳/夹耳/挂耳/头戴）与 250-350 元耳夹式选型",
+                "desired_outcome": "希望按长期佩戴、耳道闷、日程与预算等实际约束确定耳机形态和需求优先度，并收敛到具体型号与到货后的验证方案。",
+                "query_count": 7,
+                "turns": [
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10
+                ],
+                "original_events": 44,
+                "full_events": 52,
+                "candidate_episodes_if_valid": 1
+              }
+            ],
+            "covered_turns": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "covered_original_events": 72,
+            "coverage": 1,
+            "extra_original_event_memberships": 22,
+            "overlap_ratio": 0.3055555555555556,
+            "extra_full_event_memberships": 26,
+            "full_overlap_ratio": 0.30952380952380953,
+            "relations": [],
+            "output_sha256": "4dfaba59799ae82cbd3ade6b655947e9b3c6e92fdad6f1e25d50a7309c7ff930"
+          }
+        ],
+        "raw_metrics_are_diagnostic_only": false
+      },
+      "baseline/noncode": {
+        "status": "completed",
+        "threads": 4,
+        "attempts": [
+          {
+            "attempt": 1,
+            "elapsed_ms": 56618,
+            "finish_reason": "tool_calls",
+            "usage": {
+              "prompt_tokens": 21124,
+              "completion_tokens": 9027,
+              "total_tokens": 30151,
+              "prompt_tokens_details": {
+                "cached_tokens": 1280
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 6991
+              },
+              "prompt_cache_hit_tokens": 1280,
+              "prompt_cache_miss_tokens": 19844
+            },
+            "invalid_assignments": [],
+            "missing_query_refs": [],
+            "threads": [
+              {
+                "id": "T1",
+                "title": "判断 vivo Y78+ 是否该现在换机（2400 预算、12/16+512 需求）",
+                "desired_outcome": "判断现有 vivo Y78+ 是否还够用、是否该现在换而不是继续等降价，并确认 2400 元预算内 12/16+512 是否现实。",
+                "query_count": 2,
+                "turns": [
+                  1,
+                  2
+                ],
+                "original_events": 22,
+                "full_events": 26,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T2",
+                "title": "2400 元内定机型：红米 Turbo 5 标准版 vs Turbo 5 Max",
+                "desired_outcome": "在 2400 元预算与 16+512 偏好的约束下，定下买 Turbo 5 标准版还是 Turbo 5 Max、买哪一档配置，并列出下单前需核实的事项。",
+                "query_count": 1,
+                "turns": [
+                  3
+                ],
+                "original_events": 6,
+                "full_events": 6,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T3",
+                "title": "确定耳机形态与需求优先级（耳夹/挂耳/头戴/半入耳ANC）",
+                "desired_outcome": "按长期佩戴、安静办公与实验室环境、250–300 预算等条件，确定该买哪种形态的耳机、需求优先级如何排序，以及加预算到什么档位为止。",
+                "query_count": 6,
+                "turns": [
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9
+                ],
+                "original_events": 38,
+                "full_events": 45,
+                "candidate_episodes_if_valid": 1
+              },
+              {
+                "id": "T4",
+                "title": "耳夹式耳机具体型号推荐与到货验证方案",
+                "desired_outcome": "在耳夹式形态已定后，按既定需求筛出可买的具体型号（QCY C50S、南卡 ClipSuper2、声阔 C40i 太空舱 Pro），给出取舍结论、购买前核实项与到货一周的验证/退货判断标准。",
+                "query_count": 1,
+                "turns": [
+                  10
+                ],
+                "original_events": 6,
+                "full_events": 7,
+                "candidate_episodes_if_valid": 1
+              }
+            ],
+            "covered_turns": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "covered_original_events": 72,
+            "coverage": 1,
+            "extra_original_event_memberships": 0,
+            "overlap_ratio": 0,
+            "extra_full_event_memberships": 0,
+            "full_overlap_ratio": 0,
+            "relations": [
+              {
+                "from_thread_id": "T2",
+                "relation": "depends_on",
+                "to_thread_id": "T1",
+                "evidence_refs": [
+                  "evt_probe_ff4d3bf984828bc5676d2b40",
+                  "evt_probe_74e3d9054625b6e8ecfe7489"
+                ],
+                "reason": "query 4 先定下 2400 预算与 12/16+512 配置要求，query 8 只在该前提下比较两台红米，选型结论依赖前一任务线的预算与配置结论。"
+              },
+              {
+                "from_thread_id": "T4",
+                "relation": "depends_on",
+                "to_thread_id": "T3",
+                "evidence_refs": [
+                  "evt_probe_8ccfc775199944425d26d089",
+                  "evt_probe_68913810dc81dba5c979c5a7"
+                ],
+                "reason": "query 29 要求“根据我的需求梳理”推荐耳夹式，其筛选条件与优先级来自 query 26 前后已确定的耳夹形态、使用场景与预算档位。"
+              }
+            ],
+            "output_sha256": "ce33aa39fdce36d9614fb9ea7f9fcc1e6346fc9087060a7c77c9eb154e5a6f9b"
+          }
+        ],
+        "raw_metrics_are_diagnostic_only": false
+      }
+    },
+    "historical_final_only": {
+      "current/code": {
+        "threads": [
+          {
+            "id": "img-skill-102-usability-test",
+            "title": "测试与评估生图 skill 1.0.2 的生成、修图与可用性",
+            "turns": [
+              1,
+              2
+            ],
+            "original_events": 56
+          },
+          {
+            "id": "image-lane-streaming-architecture",
+            "title": "澄清生图链路三段的流式/非流式行为与默认值",
+            "turns": [
+              2
+            ],
+            "original_events": 18
+          },
+          {
+            "id": "fix-400-stream-param-and-pr243",
+            "title": "排查并修复他人生图 400 unsupported_parameter（缺 stream 参数）故障",
+            "turns": [
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "original_events": 202
+          },
+          {
+            "id": "skillhub-precheck-block-and-zip-deploy",
+            "title": "整理 SkillHub 发布预检失败的问题说明并决定候选包是否手动装",
+            "turns": [
+              9,
+              10
+            ],
+            "original_events": 42
+          }
+        ],
+        "extra_original_event_memberships": 40
+      },
+      "baseline/code": {
+        "threads": [
+          {
+            "id": "T1",
+            "title": "生图 skill 1.0.2 生成与修图实测及可用性判定",
+            "turns": [
+              1
+            ],
+            "original_events": 38
+          },
+          {
+            "id": "T2",
+            "title": "生图链路流式/非流式归属与默认值确认",
+            "turns": [
+              2
+            ],
+            "original_events": 18
+          },
+          {
+            "id": "T3",
+            "title": "他人生图 400 unsupported_parameter(stream) 的归因与 relay 自动降级修复",
+            "turns": [
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "original_events": 202
+          },
+          {
+            "id": "T4",
+            "title": "image-generation 1.0.3（stream:false）发布预检阻塞与交付方式决策",
+            "turns": [
+              9,
+              10
+            ],
+            "original_events": 42
+          }
+        ],
+        "extra_original_event_memberships": 22
+      },
+      "current/noncode": {
+        "threads": [
+          {
+            "id": "T1",
+            "title": "2400 元预算内是否换机与机型选定（vivo Y78+ 升级）",
+            "turns": [
+              1,
+              2,
+              3
+            ],
+            "original_events": 28
+          },
+          {
+            "id": "T2",
+            "title": "蓝牙耳机形态与机型选择（耳夹式为主，预算 250–300 元）",
+            "turns": [
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "original_events": 44
+          },
+          {
+            "id": "T3",
+            "title": "低音量下的听感补偿与煲机认知（听力健康与 EQ 设置）",
+            "turns": [
+              5,
+              6,
+              7
+            ],
+            "original_events": 20
+          }
+        ],
+        "extra_original_event_memberships": 20
+      },
+      "baseline/noncode": {
+        "threads": [
+          {
+            "id": "T1",
+            "title": "2400元内换不换手机及红米 Turbo 5 / 5 Max 选型",
+            "turns": [
+              1,
+              2,
+              3
+            ],
+            "original_events": 28
+          },
+          {
+            "id": "T2",
+            "title": "长期佩戴耳机形态选型与250–470元耳夹式机型推荐",
+            "turns": [
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            "original_events": 44
+          }
+        ],
+        "extra_original_event_memberships": 0
+      }
+    },
+    "diagnostic_repair": {
+      "status": "completed",
+      "diagnostic_only": true,
+      "changed": "more specific tool error feedback; frozen system prompt unchanged",
+      "elapsed_ms": 8873,
+      "http_status": 200,
+      "usage": {
+        "prompt_tokens": 65797,
+        "completion_tokens": 2325,
+        "total_tokens": 68122,
+        "prompt_tokens_details": {
+          "cached_tokens": 65408
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 84
+        },
+        "prompt_cache_hit_tokens": 65408,
+        "prompt_cache_miss_tokens": 389
+      },
+      "only_query_refs_changed": true,
+      "threads": [
+        {
+          "id": "T1",
+          "title": "实测最新生图 skill（image-generation 1.0.2）是否可用",
+          "turns": [
+            1,
+            2
+          ],
+          "original_events": 56,
+          "full_events": 69,
+          "candidate_episodes": 1
+        },
+        {
+          "id": "T2",
+          "title": "排查并修复第三方生图 400（unsupported_parameter/stream）：relay 严格 marker + skill stream:false",
+          "turns": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "original_events": 202,
+          "full_events": 237,
+          "candidate_episodes": 1
+        },
+        {
+          "id": "T3",
+          "title": "确认生图 skill 的名称与身份",
+          "turns": [
+            3
+          ],
+          "original_events": 96,
+          "full_events": 120,
+          "candidate_episodes": 1
+        },
+        {
+          "id": "T4",
+          "title": "处理 skill 发布预检卡住与是否手动上传 zip 的决策",
+          "turns": [
+            9,
+            10
+          ],
+          "original_events": 42,
+          "full_events": 42,
+          "candidate_episodes": 1
+        }
+      ],
+      "covered_queries": 12,
+      "covered_original_events": 278,
+      "extra_original_event_memberships": 118,
+      "extra_full_event_memberships": 142
+    }
+  },
+  "private_artifacts_sha256": {
+    "current/code/calls.json": "a8d502410489e0acaa386b5c8f310b9dc3d1ef1aa2521e09d737ddc3130404e5",
+    "current/code/result.json": "3eadb588a6e0b5e49081c2ca235818838dc54e2d67ad2836917378d0aca51692",
+    "current/noncode/calls.json": "c14475dba2c4db57ba6883100832d842bf5247f9a999d74eeb37fb19cd2cbf46",
+    "current/noncode/result.json": "327dc38edc109f9fdf212fae655e2676d74d0d708aee11972eba46e231cf5fb5",
+    "current/noncode/stage1-output.json": "e1c18c3580eccd2d8b79db5579aab6e62616d699630a559bf93e11e279f95c64",
+    "baseline/code/calls.json": "825f5437a6d4e08b455f796d9ab3d78b549d7a205198e129ae8218a402ce04b1",
+    "baseline/code/result.json": "2f25a44b603505e8f2cf17a8e30119a6cfdc21ee344eb2b700a6ff1bb55c3dd7",
+    "baseline/code/stage1-output.json": "dffe500a8f99d8cf827080b1c554ecbb31b578249bc60300a6513078acdd761c",
+    "baseline/noncode/calls.json": "2ab46738922f136aa14aba5dc3774c6d0711276e6deeb820ef3a40ea91165bd8",
+    "baseline/noncode/result.json": "e83e894d38234cdb19b8f28278a107b056e515300337aacc538adf3be279b119",
+    "baseline/noncode/stage1-output.json": "fb0eb2dbcb9f628089f9a7da9a41230db29a93cfffab058e515874bb42af1525",
+    "current/code-format-repair/request.json": "21854349a0cb1c139c51607292b36774bdaa2e67afed0514bf23cb17e38c20aa",
+    "current/code-format-repair/response.json": "2209922af3741a6188f77eea567b05702eaa2a64e03953d1c61b36441b43a8a0",
+    "current/code-format-repair/stage1-output.json": "cbfa401a3d9329d52e93cf1cfd1842afff3bec937852fed5d8fc21682a8e7565"
+  },
+  "remote_artifacts_verified": 16
+}
