@@ -14,7 +14,10 @@ const hash=x=>createHash('sha256').update(x).digest('hex');
 const config={baseUrl:process.env.MODEL_BASE_URL,key:process.env.MODEL_API_KEY,model:process.env.MODEL_NAME,maxOutputTokens:60000};
 if(!config.baseUrl||!config.key||!config.model) throw Error('Missing model configuration');
 const realFetch=globalThis.fetch;
-const versions=['baseline','current'], labels=['code','noncode'];
+const versions=(process.env.EVAL_VARIANTS ?? 'baseline,current').split(',');
+if(!versions.length||new Set(versions).size!==versions.length||versions.some(v=>! /^[a-z][a-z0-9-]*$/.test(v)))
+  throw Error('EVAL_VARIANTS must contain unique simple variant names');
+const labels=['code','noncode'];
 const prepared={}, templates={}, prompts={};
 const provenance=path.join(root,'full-run-provenance.json');
 if(fs.existsSync(provenance)) throw Error('Use a fresh experiment directory');
@@ -29,7 +32,7 @@ for(const version of versions){
   prompts[version]=JSON.parse(fs.readFileSync(path.join(root,version+'.memory-system.json')));
   if(prompts[version].role!=='system'||typeof prompts[version].content!=='string') throw Error('Invalid frozen memory system');
 }
-if(JSON.stringify(templates.baseline.tools)!==JSON.stringify(templates.current.tools)) throw Error('Stage 1 schemas differ');
+if(versions.some(v=>JSON.stringify(templates[v].tools)!==JSON.stringify(templates[versions[0]].tools))) throw Error('Stage 1 schemas differ');
 save(provenance,{
   revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),
   model:config.model,thinking:{type:'enabled'},max_tokens:60000,max_attempts:3,
