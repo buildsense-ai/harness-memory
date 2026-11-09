@@ -60,3 +60,10 @@ The current runner requests a 60,000-token output limit for both processing
 stages. The frozen November 9 context-purpose results above used 30,000; their
 historical manifests and tag remain unchanged. Increasing this limit does not
 change prompts, inputs, validation, or format-retry behavior.
+
+A [single-candidate replay](results-context-purpose-60k-replay.json) of the
+previously failed task succeeded on its first request at the new limit. It used
+9,335 completion tokens (5,331 reasoning), so one successful random replay does
+not establish that the higher budget caused success. Stage 1 was not rerun.
+An offline probe recovered the two complete, incorrectly wrapped old responses
+without rewriting their bodies; that fallback has not been added to the pipeline.
