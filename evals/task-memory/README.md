@@ -55,3 +55,8 @@ migration or instruction to deploy an unmerged branch to the live service.
 The [completed Monday evaluation](results-context-purpose-v1.md) records six
 accepted documents out of seven, an output-format failure, and remaining source
 fidelity issues. This revision is not marked semantically accepted for production.
+
+The current runner requests a 60,000-token output limit for both processing
+stages. The frozen November 9 context-purpose results above used 30,000; their
+historical manifests and tag remain unchanged. Increasing this limit does not
+change prompts, inputs, validation, or format-retry behavior.
