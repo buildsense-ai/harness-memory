@@ -65,3 +65,44 @@ export function orderedDialogue(contextBytes, snapshot) {
   if (new Set(events.map(e => e.ref)).size !== events.length) throw Error('Duplicate dialogue refs');
   return { source_context_sha256: sourceHash, original_snapshot_sha256: snapshot.sha256, events, turns };
 }
+
+/** Expand the same bounded native history with tools, checking every aggregate tool byte for byte. */
+export function orderedContext(contextBytes, snapshot) {
+  const dialogue = orderedDialogue(contextBytes, snapshot);
+  const byIndex = new Map(dialogue.events.map(e => [e.native_index, e]));
+  const tools = snapshot.events.filter(e => e.kind === 'tool_call' || e.kind === 'tool_result');
+  const native = []; let offset = 0;
+  for (const line of contextBytes.toString('utf8').split('\n')) {
+    if (line.trim()) native.push({ value: JSON.parse(line), offset });
+    offset += Buffer.byteLength(line) + 1;
+  }
+  const events = []; const usedTools = new Set();
+  const addTool = (kind, id, content, pointer, row, i, turn) => {
+    const sameContent = original => kind === 'tool_result'
+      ? contentText(original.content) === contentText(content)
+      : JSON.stringify(original.content) === JSON.stringify(content);
+    const matches = tools.filter(e => !usedTools.has(e.ref) && e.kind === kind && e.tool_call_id === id && sameContent(e));
+    if (matches.length !== 1)
+      throw Error('Native/aggregate tool mismatch at native index ' + i);
+    const original = matches[0]; usedTools.add(original.ref);
+    events.push({ ...original, content, pointer, offset: row.offset,
+      raw_ref: 'native_context_' + dialogue.source_context_sha256.slice(0, 24) + '_' + row.offset,
+      native_index: i, native_line: i + 1, original_turn: turn.ordinal,
+      owner_query_ref: turn.owner_query_ref, source_context_sha256: dialogue.source_context_sha256,
+      original_aggregate_ref: original.ref, fidelity: 'native_recorded_tool',
+    });
+  };
+  for (const turn of dialogue.turns) for (let i = turn.native_start_index; i < turn.native_end_index_exclusive; i++) {
+    const row = native[i], message = row.value;
+    if (message.__injected || message.__checkpointSummary || message.__runtimeObservation) throw Error('Synthetic record inside selected native turn');
+    if (byIndex.has(i)) events.push(byIndex.get(i));
+    if (message.role === 'assistant' && message.tool_calls) message.tool_calls.forEach((call, j) => {
+      if (call.type !== 'function') throw Error('Unsupported native tool call');
+      addTool('tool_call', call.id, { id: call.id, name: call.function.name, arguments: call.function.arguments }, '/tool_calls/' + j, row, i, turn);
+    });
+    if (message.role === 'tool') addTool('tool_result', message.tool_call_id, message.content, '/content', row, i, turn);
+  }
+  if (usedTools.size !== tools.length) throw Error('Unmatched aggregate tools remain');
+  if (new Set(events.map(e => e.ref)).size !== events.length) throw Error('Duplicate full-context refs');
+  return { ...dialogue, events };
+}
