@@ -51,3 +51,7 @@ It retains all assigned native turns, including tools, and appends one local
 Episode reference. Use a fresh `EVAL_WORKSPACE`; the runner refuses to overwrite
 an existing provenance record. This experiment is not a production pipeline
 migration or instruction to deploy an unmerged branch to the live service.
+
+The [completed Monday evaluation](results-context-purpose-v1.md) records six
+accepted documents out of seven, an output-format failure, and remaining source
+fidelity issues. This revision is not marked semantically accepted for production.
