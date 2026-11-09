@@ -57,3 +57,23 @@ fresh private directory containing the same two source files. Run
 refuses to overwrite an existing run. The review and Python verifier also accept
 `EVAL_WORKSPACE`. Keep old baseline artifacts unchanged. Do not publish private
 logs or generated memories to this public repository.
+
+### Same-snapshot result
+
+`results-20261109.json` identifies the tested revision and hashes of all private
+inputs, raw model responses, candidates, documents, and manual review. Both
+snapshots have identical normalized events to the baseline and 100% candidate
+coverage. All six documents passed format validation on their first generation.
+
+The later explicit correction and final code verification were included in the
+appropriate code-task candidates. Attribution improved in some documents, but
+the run still has a title/body decision-state ambiguity, an unresolved source
+conflict, and a recommendation-order inconsistency; the human verdict remains
+`needs_revision`. Automated review was more permissive and was not treated as
+the acceptance decision.
+
+Candidate duplication also increased: extra event memberships were 22 → 186
+for the 278-event code sample and 0 → 32 for the 72-event non-code sample. Stage 2
+input tokens increased about 53% and 49%, respectively. Task counts changed
+4 → 3 and 2 → 3. This single stochastic run does not establish boundary stability,
+downstream retrieval improvement, or a semantic pass rate across tasks.
