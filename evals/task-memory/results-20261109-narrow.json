@@ -1,0 +1,271 @@
+{
+  "baseline_commit": "dc37e9bcb87c92f3e54142ea3d4b80b29363ee95",
+  "broad_tested_commit": "6bc04b4cb79d8b3d039f93339de9bd6b0860592a",
+  "tested_commit": "2d08814e735c6bad55532d1cb23eb2cc971cdf52",
+  "tag": "memory-eval-20261109-narrow",
+  "parent_is_original_baseline": true,
+  "model": "deepseek-flash",
+  "thinking": {
+    "type": "enabled"
+  },
+  "max_tokens": 30000,
+  "overall": "needs_revision",
+  "ci": {
+    "url": "https://github.com/buildsense-ai/harness-memory/actions/runs/42561510329",
+    "status": "success",
+    "vitest_tests": 31,
+    "python_tests": 4,
+    "typescript_build": "pass"
+  },
+  "production_deployed": false,
+  "production_revision_verified_after_run": "8f1b4033139611aebf6fb9026a07b4008686c632",
+  "review_rewrites_documents": false,
+  "limits": [
+    "Each revision has one stochastic generation per immutable sample; not an ablation or stability estimate.",
+    "No downstream retrieval/continuation benefit measured.",
+    "Review concerns fidelity to these logs, not external product/medical truth.",
+    "Episode references resolve in the private evaluation manifest; not registered in the production API."
+  ],
+  "findings": [
+    {
+      "id": "corrected_stream_model",
+      "status": "improved",
+      "stage": "stage1_and_stage2",
+      "thread": "code/T2"
+    },
+    {
+      "id": "recommendation_not_decision",
+      "status": "improved",
+      "stage": "stage2",
+      "thread": "code/T4"
+    },
+    {
+      "id": "false_history_closure",
+      "status": "residual_after_candidate_expansion",
+      "stage": "candidate_assembly_and_stage2_scope",
+      "thread": "code/T2"
+    },
+    {
+      "id": "unclosed_solution_choice",
+      "status": "residual_after_candidate_expansion",
+      "stage": "candidate_assembly_and_stage2_scope",
+      "thread": "code/T2"
+    },
+    {
+      "id": "final_code_validation",
+      "status": "residual_vs_baseline_regression_vs_broad",
+      "stage": "stage1_candidate_assembly",
+      "thread": "code/T3"
+    },
+    {
+      "id": "user_memory_requirement",
+      "status": "new_strengthening_of_source_assistant_error",
+      "stage": "stage2",
+      "thread": "noncode/T1"
+    },
+    {
+      "id": "charger_ownership",
+      "status": "not_reliably_fixed_regression_vs_broad",
+      "stage": "stage2",
+      "thread": "noncode/T1"
+    },
+    {
+      "id": "conflicting_multipoint",
+      "status": "not_fixed",
+      "stage": "stage2",
+      "thread": "noncode/T2"
+    },
+    {
+      "id": "inferred_hard_requirements",
+      "status": "partially_improved_not_fixed",
+      "stage": "stage1_metadata_and_stage2",
+      "thread": "noncode/T2"
+    },
+    {
+      "id": "conditional_final_ranking",
+      "status": "improved_vs_broad",
+      "stage": "stage2",
+      "thread": "noncode/T2"
+    },
+    {
+      "id": "phone_headphone_dependency",
+      "status": "questionable_relation",
+      "stage": "stage1",
+      "thread": "noncode/T2"
+    }
+  ],
+  "local_artifact_sha256": {
+    "run-provenance.json": "ffb6a9e4e0cc83d996c446a45f9fee69a1f0ece05973f1bceeaf8fe0841fbc25",
+    "version-verification.json": "479e3a13a83d4a11f0ea50729592add35209c924287250293b75fe8b0d9d3aa4",
+    "verification.json": "f42aaae3d8466bcb0f1ff4209319dcde71b1dd759c53cd94f471f4bd4bd59415",
+    "comparison.json": "a5e1eb2adc1353656091930e1c44422a7c5f8ca5885b658e5d11965b5133294d",
+    "comparison-three-runs.json": "2b2b1fbed748f5977731d5fb3d2320ce2f7975432a2d80bc4e4189bbc944dc84",
+    "manual-review.json": "e0b32002055633f84926960fba7d10b8828628503947b8bf342a1ed37f1cfa3d",
+    "report.md": "655b2d34dfc5b0ca07c9a041337a63d05eb1c2c668304ea64fdc95b3b043ac6f",
+    "review-criteria.md": "099813ed7ab0350f732fb9ebdf27aad0bfe3e8996bf269f0feb755371d4eacd9",
+    "compare-three-runs.py": "8c17591984e3a3448bb0d9a4594383d42efd386382750a670a6adb11a843631e",
+    "record-results.py": "7249485871c33799e1a3adca8503703eca38d8d9c5aee27ddf172a5c95a1dbe7",
+    "remote-artifact-hashes.json": "143467ca37f95f089895736185e45482ff2ed1a67780c348789cb2a7c5f64568",
+    "prompt-version-verification.json": "494fa497389239dc30c6d9029907e32430773cf1ee9c8668e56655a7cc816266"
+  },
+  "samples": {
+    "code": {
+      "source_sha256": "941841c1a1006b229a901eb3a3a51a78dc5d5e9184dd84b8de7d4923abe01de7",
+      "identical_source_events_across_three_runs": true,
+      "mechanical_checks_pass": true,
+      "generation_attempts": {
+        "T1": 1,
+        "T2": 1,
+        "T3": 1,
+        "T4": 1
+      },
+      "review_attempts": 1,
+      "thread_verdicts": {
+        "T1": "acceptable",
+        "T2": "needs_revision",
+        "T3": "acceptable_with_minor_gap",
+        "T4": "acceptable_with_minor_attribution_issue"
+      },
+      "runs": {
+        "baseline": {
+          "source_events": 278,
+          "coverage_events": 278,
+          "extra_memberships": 22,
+          "shared_unique_events": 22,
+          "total_memberships": 300,
+          "overlap_ratio": 0.07913669064748201,
+          "stage2_input_tokens": 180409,
+          "thread_count": 4,
+          "relation_count": 3
+        },
+        "broad": {
+          "source_events": 278,
+          "coverage_events": 278,
+          "extra_memberships": 186,
+          "shared_unique_events": 186,
+          "total_memberships": 464,
+          "overlap_ratio": 0.6690647482014388,
+          "stage2_input_tokens": 275375,
+          "thread_count": 3,
+          "relation_count": 1
+        },
+        "narrow": {
+          "source_events": 278,
+          "coverage_events": 278,
+          "extra_memberships": 118,
+          "shared_unique_events": 118,
+          "total_memberships": 396,
+          "overlap_ratio": 0.4244604316546763,
+          "stage2_input_tokens": 231408,
+          "thread_count": 4,
+          "relation_count": 3
+        }
+      },
+      "artifact_sha256": {
+        "metrics.json": "50c5056f3f9ff56447ac3caee8f9ed2fd524ee985e9570d53eaffa84842216dc",
+        "review-calls.json": "edae9e708e163a3187cf65bc8e1eb0b4552ecd0657b2bcd9242c87f647af6ccf",
+        "review-input.json": "fcc82d1639e34c084a7d8f6de2f7581ba50227fdba6696e33c3898941a7667e5",
+        "review-output.json": "93f90426005c05ae8b0cb330277819813c4380f69c9ef6b8deb2469af5cd379f",
+        "snapshot.json": "1e0f9122ffe1fbebff75736bca0e8b9f471f089bd93ac24fc9aa893e21b8d01d",
+        "stage1-calls.json": "29a3901f4b147b9c08dbc4248cd7025a2fdc76a8c70344554580f25959818d26",
+        "stage1-output.json": "baf8caa5c4a78dbdb1f8d910e91c28a9d0dcaa6b5b18916f220f787fa5089f16",
+        "stage1-system-prompt.txt": "c2d7d7b9d8f50a8356e9b422a5676d261e5c8525386c606474fcd570b492a572",
+        "T1/episode.json": "74a810f9a5fee89c3f5555e7324759356f83704013617b6f15de1a6324bb43b2",
+        "T1/generation-calls.json": "391067c552b413d189d00444f9885da25ed3cd11ecfa798ec8b1ba2631155e92",
+        "T1/generation-input.json": "ef725e0364a8fdb91dbef5ad2a087626a3053689ba82df0c9ba56ac263f590e5",
+        "T1/memory.md": "70344966a76571e70dfb520803dc1e8b7586773ad9c434ca0308dc0d6363034b",
+        "T1/model-output.json": "0fcaacd166b48e7443e11ea585d5f27ed7a1f4dd9e003771753f476421d29f4d",
+        "T1/system-prompt.txt": "bb384b53306115799dba715a328e3b8bff508f84a18e99c98e75bf242ed38b4c",
+        "T2/episode.json": "b14cd272cc2c5638aa391da818af759427011bcb0254dd4dfc082554a88f7444",
+        "T2/generation-calls.json": "0b4bdd359f94e4bde869c45c0a9afcbecf117739dd777ea6f3feb45f54dff214",
+        "T2/generation-input.json": "e88cff1bfb672547e3f4b8c328023abd6b4f0483a1e835590221a3a327250256",
+        "T2/memory.md": "80b7cc4ef05a02746971baefa9ee154769f15828ac776bcda43c895fa1745acd",
+        "T2/model-output.json": "c3820ff70e0f4cbec6b45afa358b451f6707a65b0b48beea2842ca9bc309c8d7",
+        "T2/system-prompt.txt": "bb384b53306115799dba715a328e3b8bff508f84a18e99c98e75bf242ed38b4c",
+        "T3/episode.json": "3587584161e15034da33df81f9814896877bdb867f624cd089d2033749686fb4",
+        "T3/generation-calls.json": "8491096b4f9cfca8dea08d90d1c83a93cc83cfd241a108e76e645eafd41ac0fe",
+        "T3/generation-input.json": "44ee8dc4b109984fcf864c76e918942944bb1ade143c3d8d064586208b0c434f",
+        "T3/memory.md": "0d49fd68192a16194dfa53f6ef00bbcfbacb406ca865d45b17afe26f1282185e",
+        "T3/model-output.json": "97fb9e711dc14b9422cb0c79c9a19572655eadd295c539f24d6c6ca162d0e1b1",
+        "T3/system-prompt.txt": "bb384b53306115799dba715a328e3b8bff508f84a18e99c98e75bf242ed38b4c",
+        "T4/episode.json": "1a1c0686209ac93325d5e16fd30f7034559519ea27e1165d3e8552e49143bb63",
+        "T4/generation-calls.json": "958b37122f04fd031568db3114a879a7d9d7f045b91a2487a7a1d95f983a6b24",
+        "T4/generation-input.json": "3df7431254e13a811460a1c23a681c8bf2999978a9e6a193ab799e389a1313cc",
+        "T4/memory.md": "69c218422de8ef789876352e1fea0d55911972f120f114e67a8b9a26423910a8",
+        "T4/model-output.json": "685d9538434e689462b6007667b4f815d38d6f000da0d67b0238336dc76112fa",
+        "T4/system-prompt.txt": "bb384b53306115799dba715a328e3b8bff508f84a18e99c98e75bf242ed38b4c"
+      }
+    },
+    "noncode": {
+      "source_sha256": "93a9a48318b39a403f0dd0320843ab414908e3ffd68d023123e75bdb3a22368e",
+      "identical_source_events_across_three_runs": true,
+      "mechanical_checks_pass": true,
+      "generation_attempts": {
+        "T1": 1,
+        "T2": 1
+      },
+      "review_attempts": 2,
+      "thread_verdicts": {
+        "T1": "needs_revision",
+        "T2": "needs_revision"
+      },
+      "runs": {
+        "baseline": {
+          "source_events": 72,
+          "coverage_events": 72,
+          "extra_memberships": 0,
+          "shared_unique_events": 0,
+          "total_memberships": 72,
+          "overlap_ratio": 0.0,
+          "stage2_input_tokens": 202080,
+          "thread_count": 2,
+          "relation_count": 1
+        },
+        "broad": {
+          "source_events": 72,
+          "coverage_events": 72,
+          "extra_memberships": 32,
+          "shared_unique_events": 32,
+          "total_memberships": 104,
+          "overlap_ratio": 0.4444444444444444,
+          "stage2_input_tokens": 302006,
+          "thread_count": 3,
+          "relation_count": 1
+        },
+        "narrow": {
+          "source_events": 72,
+          "coverage_events": 72,
+          "extra_memberships": 0,
+          "shared_unique_events": 0,
+          "total_memberships": 72,
+          "overlap_ratio": 0.0,
+          "stage2_input_tokens": 202525,
+          "thread_count": 2,
+          "relation_count": 1
+        }
+      },
+      "artifact_sha256": {
+        "metrics.json": "c47ce51fe604a3cf8686f458591adc0c002afe8ec7a73e57ca9efbe227291de2",
+        "review-calls.json": "7cd6bb1d7092a479d3411e694614cb0418a425df7b2ba126c2b8ac34f2375cf8",
+        "review-input.json": "5f95f360ed6e3fc22b18b39e0c271c79861f53563d14686086182ee14d562501",
+        "review-output.json": "90c53356f02e54b4d0447e0d15b38c6735ab55a8bfb9fc88807c1c553d883582",
+        "snapshot.json": "b05b58e6359979f451997e62d696025d58109a29bdcec41e89341112353ceb3d",
+        "stage1-calls.json": "8e503765e3b7365db1eadb327bc7b0e6a2b82f3d98fee1aa26b0678fa9e330e1",
+        "stage1-output.json": "d3b0d78999ead3c18316d4628edb81e6c29aee61397bdb5a863aa35a2b51acb0",
+        "stage1-system-prompt.txt": "c2d7d7b9d8f50a8356e9b422a5676d261e5c8525386c606474fcd570b492a572",
+        "T1/episode.json": "2c0d87c0b78d300a34d649dc77fa8180fabab02de5ccb05853475d78b32a0017",
+        "T1/generation-calls.json": "76da285bc670f5056d3bfe905996d97d7c5b45e695827fcc83d8d3ebdc34297d",
+        "T1/generation-input.json": "047a641bda25726b9c53dfd0b3965d1e19895b7dd49fa7815e46dee1801a9e42",
+        "T1/memory.md": "e32875b1f0987f0c09351ee27f867494ecde6675f1003927c34213d3a8a394fd",
+        "T1/model-output.json": "e5f3b9f2a7225372721d55260975366d62c59cc47a0f74e06122ae484cbe4757",
+        "T1/system-prompt.txt": "bb384b53306115799dba715a328e3b8bff508f84a18e99c98e75bf242ed38b4c",
+        "T2/episode.json": "10df712df713a8fbeb79af6585c405b88aae49b39444bb3266deb7d8549370c6",
+        "T2/generation-calls.json": "812fcf995df4da236d931d18e8810dd23f7c5a0e8e8423e41b9b6245e496ae5c",
+        "T2/generation-input.json": "c61cfd055a2bbe0d597c445e90ee3ae3a5e63d10b2ae539afbbe3ab1f50b559f",
+        "T2/memory.md": "aa2eb4b8d2530a5823dd8e1b4feee4a76a88033bde361c8454dd4819a6dbdf71",
+        "T2/model-output.json": "e0eef5e8c071afc989e04855718a98db15edb79fb876315f71b2099a96a41cdf",
+        "T2/system-prompt.txt": "bb384b53306115799dba715a328e3b8bff508f84a18e99c98e75bf242ed38b4c"
+      }
+    }
+  }
+}
