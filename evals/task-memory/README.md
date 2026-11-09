@@ -1,5 +1,11 @@
 # Direct task-memory evaluation
 
+The selected all-message iteration baseline is now frozen as
+[`hybrid-allmsg-v1`](versions/hybrid-allmsg-v1/README.md), with exact prompts,
+output schemas, parameters and source/result hashes. Its tag is
+`memory-eval-20261109-hybrid-v1`. See its result review for remaining semantic
+limitations; this anchor does not deploy or migrate the production pipeline.
+
 This directory freezes the actual two-stage experiment used on 2026-11-08:
 
 1. The repository's `CompatibleChatModel.partition` reads query/message only.
