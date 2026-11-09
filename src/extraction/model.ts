@@ -46,6 +46,7 @@ const partitionPrompt = `你为长期记忆建立可检索的任务线目录。�
 4. 用户明确表达或纠正的边界优先于助手解释。复合 query 可归属多条已独立成立的任务线，不得为减少归属条数而合并任务。
 5. 状态/解释/纠正/PR/CI 阻塞若只是既有工作的过程，不另开任务；独立交付物只有在用户有独立目标和验收时才单列。
 6. title 简洁具体；desired_outcome 只写想达到的结果；include_topics/exclude_topics 写下一阶段边界主题；boundary_note 说明目标和与易混淆任务合并/拆分的用户证据。
+7. 后文的 query/message 明确纠正、撤回先前结论或改变先前任务的关键状态时，将该轮 query 同时归属被更新的任务，并在 reason 说明更新点；即使纠正由助手 message 提出，也用该 message 所属的 query 锚定。一般补充、共享背景或话题相关性，不据此扩大归属或另拆任务；只补确有关键更新的轮次，不复制后续整条任务。
 
 Query 归属：每条输入中的用户 query 必须且只出现一次。允许 thread_ids 多个。role 只能为 origin、continuation、constraint、correction、status、authorization、retrospective、compound、unrelated、unresolved。authorization/retrospective 不创建新线；unrelated/unresolved 不得指向任务线。compound、authorization、retrospective、correction、unrelated、unresolved 必须说明 reason。
 

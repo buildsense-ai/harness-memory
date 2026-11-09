@@ -2,20 +2,32 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
-const root = path.dirname(new URL(import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1');
-const repo = process.env.PROBE_REPO ?? '/opt/harness-memory-current';
+const scriptRoot = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(process.env.EVAL_WORKSPACE ?? scriptRoot);
+const repo = path.resolve(process.env.PROBE_REPO ?? path.join(scriptRoot, '../..'));
 const { projectRecord } = await import(pathToFileURL(path.join(repo, 'dist/src/adapters/index.js')));
 const { CompatibleChatModel } = await import(pathToFileURL(path.join(repo, 'dist/src/extraction/model.js')));
 const hash = x => crypto.createHash('sha256').update(x).digest('hex');
 const save = (p, x) => fs.writeFileSync(p, typeof x === 'string' ? x : JSON.stringify(x, null, 2));
 const baseConfig = {baseUrl:process.env.MODEL_BASE_URL,key:process.env.MODEL_API_KEY,model:process.env.MODEL_NAME,maxOutputTokens:30000};
 if (!baseConfig.baseUrl || !baseConfig.key || !baseConfig.model) throw Error('Missing model config');
-const oldProbe = fs.readFileSync(path.join(root, 'original-direct-probe.mjs'), 'utf8');
-const memoryPrompt = oldProbe.match(/const prompt = `([\s\S]*?)`;\nconst tool/)[1];
+const memoryPrompt = fs.readFileSync(path.join(scriptRoot, 'memory-prompt.txt'), 'utf8').trim();
 const memoryTool = {type:'function',function:{name:'submit_memory_document',description:'提交唯一的 Markdown 任务记忆正文。',parameters:{type:'object',additionalProperties:false,required:['markdown'],properties:{markdown:{type:'string'}}}}};
 const files = ['code', 'noncode'];
 const realFetch = globalThis.fetch;
+if (fs.existsSync(path.join(root,'run-provenance.json'))) throw Error('Use a fresh EVAL_WORKSPACE; do not overwrite a prior run');
+save(path.join(root,'run-provenance.json'), {
+  revision:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),
+  tracked_changes:execFileSync('git',['status','--porcelain','--untracked-files=no'],{cwd:repo,encoding:'utf8'}).trim(),
+  model:baseConfig.model, thinking:{type:'enabled'}, max_tokens:30000,
+  script_sha256:hash(fs.readFileSync(fileURLToPath(import.meta.url))),
+  memory_prompt_sha256:hash(memoryPrompt),
+  partition_module_sha256:hash(fs.readFileSync(path.join(repo,'dist/src/extraction/model.js'))),
+  source_sha256:Object.fromEntries(files.map(label=>[label,hash(fs.readFileSync(path.join(root,label+'.raw.jsonl')))])),
+});
 
 function readSnapshot(label) {
   const bytes = fs.readFileSync(path.join(root, label+'.raw.jsonl'));
