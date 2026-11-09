@@ -46,8 +46,9 @@ const partitionPrompt = `你为长期记忆建立可检索的任务线目录。�
 4. 用户明确表达或纠正的边界优先于助手解释。复合 query 可归属多条已独立成立的任务线，不得为减少归属条数而合并任务。
 5. 状态/解释/纠正/PR/CI 阻塞若只是既有工作的过程，不另开任务；独立交付物只有在用户有独立目标和验收时才单列。
 6. title 简洁具体；desired_outcome 只写想达到的结果；include_topics/exclude_topics 写下一阶段边界主题；boundary_note 说明目标和与易混淆任务合并/拆分的用户证据。
+7. 任务边界与证据归属分开判断。一轮主要推进某条任务，也可能明确纠正、撤回、补充验证或更新另一条任务的重要结论、实现路径或最终状态；此时该轮 query 的 thread_ids 应同时包含被更新的任务，不必合并两条任务。检查整段对话中这样的后续更新，包括助手 message 对先前答复的明确纠正：即使用户 query 没有重复旧任务名称，也将该 message 所属的 query 锚点补给被更新的任务，并在 reason 说明更新了什么。exclude_topics 不能排除对本线结论的这种关键更新。
 
-Query 归属：每条输入中的用户 query 必须且只出现一次。允许 thread_ids 多个。role 只能为 origin、continuation、constraint、correction、status、authorization、retrospective、compound、unrelated、unresolved。authorization/retrospective 不创建新线；unrelated/unresolved 不得指向任务线。compound、authorization、retrospective、correction、unrelated、unresolved 必须说明 reason。
+Query 归属：每条输入中的用户 query 必须且只出现一次。允许 thread_ids 多个；除了复合请求，也用于上述关键证据更新。不要仅因共享实体、关键词、背景或时间相近扩大归属；只有确实改变旧任务理解、路径或状态的内容才补入，不能把后续整条相关任务一概复制过去。一轮同时承担主任务推进和旧任务更新时，用最符合该轮作用的现有 role，并在 reason 解释多归属；不新增任务或字段来表示共享。role 只能为 origin、continuation、constraint、correction、status、authorization、retrospective、compound、unrelated、unresolved。authorization/retrospective 不创建新线；unrelated/unresolved 不得指向任务线。compound、authorization、retrospective、correction、unrelated、unresolved 必须说明 reason。
 
 关系：relations 可为空。只记录明确的 depends_on、continues 或 supersedes 关系，不能把任务分组相似或共享 query 当作关系证据。方向固定为 from_thread_id --relation--> to_thread_id；例如 from=T4, relation=depends_on, to=T1 表示 T4 的结果依赖 T1。每条关系必须给出至少一个来自本输入 query/message 的 evidence_ref 和简明 reason。只在方向与关系均有原文依据时输出；不输出泛化 related/shared_context 边。关系不改变任务划分。
 

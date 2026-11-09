@@ -1,0 +1,82 @@
+{
+  "baseline_product_commit": "8f1b4033139611aebf6fb9026a07b4008686c632",
+  "model": "deepseek-flash",
+  "thinking": {
+    "type": "enabled"
+  },
+  "max_tokens": 30000,
+  "scripts_sha256": {
+    "run-validation.mjs": "957593612df8bf6c8d69ed0747426cadddda6e69a6bde2ad486ffda44aee568f",
+    "original-direct-probe.mjs": "6956590613144d2049789bbcf501e2854e5870bbb6574e71b1928ea34629f904",
+    "review-validation.mjs": "0755d5bd767a42d82efc1607418f458aec45670c06ff54d076246a911049f68b",
+    "verify-validation.py": "1f6a11074b766a086d68c8d85f32e2906d808e0befd397eefcd9188118d01ad6"
+  },
+  "samples": {
+    "code": {
+      "source_sha256": "941841c1a1006b229a901eb3a3a51a78dc5d5e9184dd84b8de7d4923abe01de7",
+      "stage1_prompt_sha256": "e7caf0f38fd72bc0a63772308ee5b182fab0b1d694412977e62b189c5fe0e676",
+      "stage2_prompt_sha256": "44c59d6a6ddf8bd9f6d353a576c1dac629dc4bf5447f44e43e751956617784fb",
+      "artifacts_sha256": {
+        "metrics.json": "eff8b0686d2d20581a57a4b9b27a274ac2df6d76009de69d86fc9798f9becba8",
+        "review-calls.json": "d5a8e8ff0e15c4ea3b4b3d7c4026f8a2ba740779aed3d43a719329cc6534dce3",
+        "review-input.json": "555e453bc8ce84cdae47721998ca567f2680bc145b4370f053305cdea08ea0c5",
+        "review-output.json": "d939381b0e8c39876ee740990cd24661496b3abbf6af241cd9f648e5d40fdbfe",
+        "snapshot.json": "1e0f9122ffe1fbebff75736bca0e8b9f471f089bd93ac24fc9aa893e21b8d01d",
+        "stage1-calls.json": "d66e410c047e30c86016cf923d17f7ef8a7796d0f95066c5714127848a5be776",
+        "stage1-output.json": "20e3a821a5c2e7ba2ce7b0b0ae4f48bc94b05957786bb742cff8aa15175c6a1b",
+        "stage1-system-prompt.txt": "f9d4925a4743ba201c722fc26f2890518bc72314b65af318aa98cd59b08cbc74",
+        "T1/episode.json": "002e0a66367b910c36996437a4f86e1eb32d6ec85327446d94c6a3a7b73e77e0",
+        "T1/generation-calls.json": "af6aefa1da4e5a61f47e58ae8e88d4f127e9e074e5707fc9567ba6b212f6e07d",
+        "T1/generation-input.json": "456832463016902ccc4f6aa4dd9bea2d2597a8178c1f2ec9475d6242fb28a6ff",
+        "T1/memory.md": "d1907bb96f554ad4407f66e5b8e06c14da7a55081a2cb37eff5039cfcc98986b",
+        "T1/model-output.json": "b08a3678a42aa25353bf135a9807499908e58e134705864dac9b39b42b46e041",
+        "T1/system-prompt.txt": "6c526315a0e93518a496b1789825a84a57dea3a841ef103eb25395ad4ec66ec8",
+        "T2/episode.json": "c9c23b490e84c4662543a872e82a9d6b9e7749d6bf563c27ebdb5f8094c0b734",
+        "T2/generation-calls.json": "da013899b6e17e1554554f8e4e6016f864b68c5d9957b491eea3d2f1961f32e8",
+        "T2/generation-input.json": "c38aaa4491ee26ad67fdf1d15d65554f355f0f72f608b8625568d9a4962779c7",
+        "T2/memory.md": "17b2e2475ed0ea7e43ec6e90e85375085d9a2fae69d8384578fd5a5c2a007fed",
+        "T2/model-output.json": "fcb4a720ea086a3860e04e2d66b1d607f69b329baf8ce299ad9d1526cb132912",
+        "T2/system-prompt.txt": "6c526315a0e93518a496b1789825a84a57dea3a841ef103eb25395ad4ec66ec8",
+        "T3/episode.json": "e8c2690b030e76d874ae80fd6d599c5871252c684afaa5e141f2d2fbdb8e41c2",
+        "T3/generation-calls.json": "36871107c94ca3d0b3248640e1bc248193d4b7499c273139be94a6d8f8ce7f57",
+        "T3/generation-input.json": "7fde94f739237f2a5e90621b6caf458461ab6f10e7d8e25a6c84889053c13c9b",
+        "T3/memory.md": "ae81befa3eccae71918bfa616ebec7727aab6f9f2a0cd83282c4203c151973b3",
+        "T3/model-output.json": "48104e70cc9bfb552408530430aeec155e77055e92b731be22d05cb7ddc5304e",
+        "T3/system-prompt.txt": "6c526315a0e93518a496b1789825a84a57dea3a841ef103eb25395ad4ec66ec8",
+        "T4/episode.json": "8a17b16ac47c86102cd06f046d521844b243e3e3aa5e19962c7434025098a8fb",
+        "T4/generation-calls.json": "90c854175950c2f15f9ffb1fdac30e5f7dfedf8d75d66a95cfdb4020c4324f6a",
+        "T4/generation-input.json": "ed84a4d0e8e1cabf757fee26421923f5e571ae89112423c4b7646d52ba67f70f",
+        "T4/memory.md": "afbbe1552bc73cf1eb95aeae9e67121ed328c9b91d6abca7f115e55d6d1c9ffd",
+        "T4/model-output.json": "9d9bc998d5d4337edf5027a208f445e837995426315dc7d7d132973bdaf2d0f4",
+        "T4/system-prompt.txt": "6c526315a0e93518a496b1789825a84a57dea3a841ef103eb25395ad4ec66ec8"
+      }
+    },
+    "noncode": {
+      "source_sha256": "93a9a48318b39a403f0dd0320843ab414908e3ffd68d023123e75bdb3a22368e",
+      "stage1_prompt_sha256": "e7caf0f38fd72bc0a63772308ee5b182fab0b1d694412977e62b189c5fe0e676",
+      "stage2_prompt_sha256": "44c59d6a6ddf8bd9f6d353a576c1dac629dc4bf5447f44e43e751956617784fb",
+      "artifacts_sha256": {
+        "metrics.json": "f592edff0fd447b0ed72053a8c0e9c2624e1636321acb1a6fab48aad2756c08c",
+        "review-calls.json": "241b74ea92d04685faafd1cd067f5d093047a1c42eed3ecd3de16d7184a9166c",
+        "review-input.json": "e7932ac84260732a039c5dd3c21b8866398f51badf8d12a53a7662ae74b0fedf",
+        "review-output.json": "1203906ffe7ec5a24dc546acc62b9ea8794a5b1ee6d92c7e5f2828d301dcd4d9",
+        "snapshot.json": "b05b58e6359979f451997e62d696025d58109a29bdcec41e89341112353ceb3d",
+        "stage1-calls.json": "3a2276318aabc38c6e2825173a64268e0fff8dd21a257d8a2b05d1a852ba4c58",
+        "stage1-output.json": "f8d3daa20389397cc3b290401eab93ebea4a1cfc527527b8abec0cae66fe4453",
+        "stage1-system-prompt.txt": "f9d4925a4743ba201c722fc26f2890518bc72314b65af318aa98cd59b08cbc74",
+        "T1/episode.json": "5cc893ca77703df4402c25871af0f169bac6cb172180db095b3201c6d76d54e5",
+        "T1/generation-calls.json": "54798eecd0651c8b40bfb808aa5f1d6c2e48869a917ac4f7d5a33069ef610a40",
+        "T1/generation-input.json": "46d87587ca5c87943fe68e7a2367c041c241c501cf988a6a163edf5576cf7c51",
+        "T1/memory.md": "f99e84e64a94f953e69ecbb6dd090020a9f766584586b8342e6d0e43572e07ac",
+        "T1/model-output.json": "6ffd9b95e87b0dcaa77faf80afcd8c4fa982fefcc9fea51e9750aed76a6f2256",
+        "T1/system-prompt.txt": "6c526315a0e93518a496b1789825a84a57dea3a841ef103eb25395ad4ec66ec8",
+        "T2/episode.json": "aafa76b2540351a2f56b5ab204e3ac91d5a9964d2a490d076758f31df71e2910",
+        "T2/generation-calls.json": "84fd77b13447962a52d3648f058df055ebc366d195202b82dab069a880adfa45",
+        "T2/generation-input.json": "da6ca99171a03ea1fdc68d991578e2bab9fd693cb57f9c726f9fe76a47123d24",
+        "T2/memory.md": "ed4c9533362ff825f7e6a88f1f1be54d1043789a330f67975a0232d9d0c2ab23",
+        "T2/model-output.json": "db4dd83d2ae89e33d3ccc42f6bd163f1f532e7d999e5daac6e87859a763866c6",
+        "T2/system-prompt.txt": "6c526315a0e93518a496b1789825a84a57dea3a841ef103eb25395ad4ec66ec8"
+      }
+    }
+  }
+}
