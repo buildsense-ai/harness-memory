@@ -52,7 +52,7 @@ for(const version of versions) for(const label of labels){
   globalThis.fetch=async(url,options)=>{
     const request=JSON.parse(options.body);request.messages[0]=structuredClone(templates[version].messages[0]);
     const start=Date.now();
-    const response=await realFetch(url,{...options,body:JSON.stringify(request),signal:AbortSignal.timeout(600000)});
+    const response=await realFetch(url,{...options,body:JSON.stringify(request),signal:AbortSignal.timeout(900000)});
     const data=await response.clone().json();calls.push({request,response:data,http_status:response.status,elapsed_ms:Date.now()-start});
     save(path.join(out,'stage1-calls.json'),calls);return response;
   };
@@ -102,7 +102,7 @@ async function generate(job){
       const start=Date.now();
       const response=await realFetch(config.baseUrl.replace(/\/$/,'')+'/chat/completions',{
         method:'POST',headers:{authorization:'Bearer '+config.key,'content-type':'application/json'},
-        body:JSON.stringify(request),signal:AbortSignal.timeout(600000)});
+        body:JSON.stringify(request),signal:AbortSignal.timeout(900000)});
       const data=await response.json(),trace={request,response:data,http_status:response.status,elapsed_ms:Date.now()-start};calls.push(trace);
       save(path.join(dir,'generation-calls.json'),calls);
       if(!response.ok)throw Error('Generation HTTP '+response.status);

@@ -44,7 +44,7 @@ for (const version of ['current','baseline']) for (const label of ['code','nonco
     const request=JSON.parse(options.body);
     request.messages[0]=structuredClone(templates[version].messages[0]);
     const started=Date.now();
-    const response=await realFetch(url,{...options,body:JSON.stringify(request),signal:AbortSignal.timeout(600000)});
+    const response=await realFetch(url,{...options,body:JSON.stringify(request),signal:AbortSignal.timeout(900000)});
     const data=await response.clone().json();
     calls.push({request,response:data,http_status:response.status,elapsed_ms:Date.now()-started});
     save(path.join(out,'calls.json'),calls);

@@ -21,6 +21,9 @@ scaffold. Stage 1 is not rerun. No production documents or service deployment.
 - 60,000 output tokens, three workers, at most three format attempts, no extra
   model review. Interleave variants by candidate. A fresh high control avoids
   treating all historical variation as an effort gain.
+- Active requests allow 15 minutes per response: the initial max requests already
+  exceeded the old two-minute product timeout. This does not change retry policy
+  or output budget; the probe used 15 minutes from its first request.
 
 ## Review and acceptance
 

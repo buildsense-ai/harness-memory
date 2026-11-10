@@ -397,7 +397,7 @@ export class CompatibleChatModel implements ChatModel {
         method: "POST",
         headers: { authorization: "Bearer " + this.config.key, "content-type": "application/json" },
         body: JSON.stringify({ model: this.config.model, thinking: { type: "enabled" }, reasoning_effort: "max", messages, tools: [tool], max_tokens: this.config.maxOutputTokens }),
-        signal: AbortSignal.timeout(120000),
+        signal: AbortSignal.timeout(900000),
       });
       const data = (await response.json()) as any;
       if (!response.ok) {

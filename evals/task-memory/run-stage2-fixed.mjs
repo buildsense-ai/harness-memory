@@ -55,7 +55,7 @@ async function generate(job){
       const started=Date.now();
       const response=await fetch(MODEL_BASE_URL.replace(/\/$/,'')+'/chat/completions',{
         method:'POST',headers:{authorization:'Bearer '+MODEL_API_KEY,'content-type':'application/json'},
-        body:JSON.stringify(request),signal:AbortSignal.timeout(600000)});
+        body:JSON.stringify(request),signal:AbortSignal.timeout(900000)});
       const data=await response.json();
       const trace={request,response:data,http_status:response.status,elapsed_ms:Date.now()-started};calls.push(trace);
       save(path.join(dir,'generation-calls.json'),calls);
