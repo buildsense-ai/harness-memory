@@ -1,6 +1,9 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { validateEvidenceDocument } from './evidence-scaffold.mjs';
+import { schemaIssues, requireValid } from '../../src/extraction/output.ts';
+import { memoryTool, validateMemoryDocument } from '../../src/extraction/memory-output.ts';
+import { createEvidenceScaffold } from './evidence-scaffold.mjs';
+const { validateEvidenceDocument } = createEvidenceScaffold({ schemaIssues, requireValid, memoryTool, validateMemoryDocument });
 
 const events = [{ ref: 'q1', text: '如果改用 B 呢？' }, { ref: 'm1', text: '当时建议试用 B。' }];
 const valid = () => ({ support_notes: [{ source_ref: 'q1', quote: '如果改用 B 呢？', record_as: '用户的条件性讨论，不能写为已决定。' }], markdown: '# 方案讨论\n\n## 背景\n用户询问改用 B 的可能性。' });

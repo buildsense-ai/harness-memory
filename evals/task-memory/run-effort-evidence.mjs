@@ -2,9 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { appendOutputRetry, outputFeedback, readToolOutput } from '../../dist/src/extraction/output.js';
+import { appendOutputRetry, outputFeedback, readToolOutput, schemaIssues, requireValid } from '../../dist/src/extraction/output.js';
 import { memoryTool, validateMemoryDocument } from '../../dist/src/extraction/memory-output.js';
-import { evidenceTool, validateEvidenceDocument } from './evidence-scaffold.mjs';
+import { createEvidenceScaffold } from './evidence-scaffold.mjs';
+const { evidenceTool, validateEvidenceDocument } = createEvidenceScaffold({ schemaIssues, requireValid, memoryTool, validateMemoryDocument });
 
 const { EVAL_BASELINE, EVAL_WORKSPACE, MODEL_BASE_URL, MODEL_API_KEY, MODEL_NAME } = process.env;
 if (!EVAL_BASELINE || !EVAL_WORKSPACE || !MODEL_BASE_URL || !MODEL_API_KEY || MODEL_NAME !== 'deepseek-flash')

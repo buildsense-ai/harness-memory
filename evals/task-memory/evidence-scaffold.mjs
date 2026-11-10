@@ -1,8 +1,7 @@
-import { schemaIssues, requireValid } from '../../dist/src/extraction/output.js';
-import { memoryTool, validateMemoryDocument } from '../../dist/src/extraction/memory-output.js';
-
 // Evaluation-only extension. Production and the frozen baseline schema stay unchanged.
-export const evidenceTool = structuredClone(memoryTool);
+// Accept the same validators as the caller; tests need no prebuilt dist checkout.
+export function createEvidenceScaffold({ schemaIssues, requireValid, memoryTool, validateMemoryDocument }) {
+const evidenceTool = structuredClone(memoryTool);
 evidenceTool.function.description = '先提交少量临时原文依据，再提交完整 Markdown 任务记忆。';
 evidenceTool.function.parameters = {
   type: 'object', additionalProperties: false, required: ['support_notes', 'markdown'],
@@ -15,7 +14,7 @@ evidenceTool.function.parameters = {
   },
 };
 
-export function validateEvidenceDocument(value, events) {
+function validateEvidenceDocument(value, events) {
   const issues = schemaIssues(value, evidenceTool.function.parameters);
   const sources = new Map(events.map((event, index) => [event.ref, { ...event, index }]));
   let previous = -1;
@@ -37,4 +36,6 @@ export function validateEvidenceDocument(value, events) {
   catch (error) { if (error.issues) issues.push(...error.issues); else throw error; }
   requireValid(issues, issues.some(i => i.allowed_ref_set) ? { event_refs: events.map(e => e.ref) } : {});
   return value;
+}
+return { evidenceTool, validateEvidenceDocument };
 }
