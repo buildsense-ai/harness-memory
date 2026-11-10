@@ -50,6 +50,18 @@ Use `EVAL_BASELINE` for the private November 9 hybrid artifact root and a fresh
 `EVAL_WORKSPACE`, with the existing model environment. Run
 `node evals/task-memory/run-effort-evidence.mjs` after `npm run build`.
 
+## Budget follow-up (separate run)
+
+The original max requests for code T3 and T4 reached 60,000 completion tokens,
+including 56,879 / 57,924 reasoning tokens, and truncated the final tool body.
+Keep that original comparison unchanged. Replay only these two candidates with
+the same frozen prompt/schema and explicit max at 131,072 output tokens, using
+`EVAL_VARIANTS=hybrid-max`, `EVAL_CASES=code/T3,code/T4` and
+`EVAL_MAX_TOKENS=131072`, in a different fresh workspace. This follow-up isolates
+the output budget and must not replace the original failures in reported counts.
+The current DeepSeek API documentation gives 128K as the default budget for max:
+https://api-docs.deepseek.com/api/create-chat-completion/
+
 Historical tags/manifests remain byte-for-byte unchanged. Active product requests
 and current evaluation entry points use explicit max. The comparison's high arm
 is an intentional control, not the new default.

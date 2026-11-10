@@ -12,6 +12,8 @@ if (!EVAL_BASELINE || !EVAL_WORKSPACE || !MODEL_BASE_URL || !MODEL_API_KEY || MO
   throw Error('Set EVAL_BASELINE, fresh EVAL_WORKSPACE and the established deepseek-flash model environment');
 const root = path.resolve(EVAL_WORKSPACE), baseline = path.resolve(EVAL_BASELINE);
 if (root === baseline || fs.existsSync(root)) throw Error('Use a fresh output directory separate from the baseline');
+const maxTokens = Number(process.env.EVAL_MAX_TOKENS ?? 60000);
+if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 393216) throw Error('Invalid EVAL_MAX_TOKENS');
 const hash = x => createHash('sha256').update(x).digest('hex');
 const read = p => JSON.parse(fs.readFileSync(p));
 const save = (p, value) => fs.writeFileSync(p, typeof value === 'string' ? value : JSON.stringify(value, null, 2));
@@ -19,12 +21,17 @@ const frozenSystem = read(new URL('./versions/hybrid-allmsg-v1/hybrid.memory-sys
 const frozenTool = read(new URL('./versions/hybrid-allmsg-v1/hybrid.memory-tool.json', import.meta.url));
 if (JSON.stringify(frozenTool) !== JSON.stringify(memoryTool)) throw Error('Baseline schema changed');
 const delta = fs.readFileSync(new URL('./evidence-scaffold-v1.txt', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
-const variants = [
+let variants = [
   { name: 'hybrid-high', effort: 'high', system: frozenSystem, tool: memoryTool, evidence: false },
   { name: 'hybrid-max', effort: 'max', system: frozenSystem, tool: memoryTool, evidence: false },
   { name: 'hybrid-max-evidence', effort: 'max', system: { role: 'system', content: frozenSystem.content + '\n\n' + delta }, tool: evidenceTool, evidence: true },
 ];
-const cases = [];
+if (process.env.EVAL_VARIANTS) {
+  const requested = process.env.EVAL_VARIANTS.split(',');
+  if (new Set(requested).size !== requested.length || requested.some(name => !variants.some(v => v.name === name))) throw Error('Unknown/duplicate EVAL_VARIANTS');
+  variants = variants.filter(v => requested.includes(v.name));
+}
+let cases = [];
 for (const label of ['code', 'noncode']) {
   for (const thread of read(path.join(baseline, 'hybrid', label, 'metrics.json')).threads) {
     if (thread.status !== 'completed') throw Error('Baseline must be complete');
@@ -39,11 +46,16 @@ for (const label of ['code', 'noncode']) {
       input_sha256: hash(inputBytes), user_content_sha256: hash(user.content), baseline_markdown_sha256: hash(fs.readFileSync(path.join(source, 'memory.md'))) });
   }
 }
+if (process.env.EVAL_CASES) {
+  const requested = process.env.EVAL_CASES.split(',');
+  if (new Set(requested).size !== requested.length || requested.some(key => !cases.some(c => c.label + '/' + c.thread_id === key))) throw Error('Unknown/duplicate EVAL_CASES');
+  cases = cases.filter(c => requested.includes(c.label + '/' + c.thread_id));
+}
 fs.mkdirSync(root, { recursive: true });
 for (const v of variants) save(path.join(root, v.name + '.template.json'), { system: v.system, tool: v.tool, reasoning_effort: v.effort });
 save(path.join(root, 'provenance.json'), {
   revision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-  model: MODEL_NAME, thinking: { type: 'enabled' }, max_tokens: 60000, max_attempts: 3, concurrency: 3,
+  model: MODEL_NAME, thinking: { type: 'enabled' }, max_tokens: maxTokens, max_attempts: 3, concurrency: 3,
   stage1_rerun: false, extra_model_review: false, event_pruning: false, production_write: false,
   comparison: 'fresh high vs max with identical hybrid-v1 prompt; max vs max+temporary source excerpts',
   runner_sha256: hash(fs.readFileSync(new URL(import.meta.url))),
@@ -67,7 +79,7 @@ async function generate({ c, v }) {
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
       const request = { model: MODEL_NAME, thinking: { type: 'enabled' }, reasoning_effort: v.effort,
-        messages: structuredClone(messages), tools: [v.tool], max_tokens: 60000 };
+        messages: structuredClone(messages), tools: [v.tool], max_tokens: maxTokens };
       const started = Date.now();
       const response = await fetch(MODEL_BASE_URL.replace(/\/$/, '') + '/chat/completions', {
         method: 'POST', headers: { authorization: 'Bearer ' + MODEL_API_KEY, 'content-type': 'application/json' },
