@@ -40,11 +40,13 @@ conversations will be needed before accepting a prompt for production.
 
 ## Execution checklist
 
-- [ ] Set active model requests to explicit max; keep historical frozen versions.
-- [ ] Build, run output regressions and test exact-quote rejection offline.
-- [ ] Run the three variants on Monday using existing private model environment.
-- [ ] Verify input/prompt/parameter/output fidelity and source pointers.
-- [ ] Review all seven candidates and report concrete improvements/regressions.
+- [x] Set active model requests to explicit max; keep historical frozen versions.
+- [x] Build, run output regressions and test exact-quote rejection offline.
+- [x] Run the three variants on Monday using existing private model environment.
+- [x] Verify input/prompt/parameter/output fidelity and source pointers.
+- [x] Review all seven candidates and report concrete improvements/regressions.
+
+Completed results: [effort/evidence review](results-effort-evidence-v1.md).
 
 Use `EVAL_BASELINE` for the private November 9 hybrid artifact root and a fresh
 `EVAL_WORKSPACE`, with the existing model environment. Run

@@ -16,6 +16,12 @@ evaluation artifacts; final memory still contains only Markdown and an Episode
 reference. This change does not accept the failed faithful-record prompt or
 deploy the direct-Markdown evaluation route.
 
+The [completed effort/evidence comparison](results-effort-evidence-v1.md) records
+all seven cases per arm and the separate 128K budget follow-up. Max had local
+semantic improvements but did not solve conditional-to-decision promotion;
+temporary evidence also introduced retries and an important omission. The
+hybrid-v1 prompt remains the baseline.
+
 This directory freezes the actual two-stage experiment used on 2026-11-08:
 
 1. The repository's `CompatibleChatModel.partition` reads query/message only.
