@@ -1,0 +1,87 @@
+{
+  "experiment": "context-purpose-v1-single-candidate-60k-replay",
+  "prompt_commit": "fb3e6ba20826d08a2ce0f4067c062ad300eda0f0",
+  "budget_commit": "4c83d120d8256edf4e0a988e8ef96770ae9e8fbc",
+  "changed_request_fields": {
+    "max_tokens": {
+      "before": 30000,
+      "after": 60000
+    }
+  },
+  "stage1_rerun": false,
+  "format_fallback_implemented": false,
+  "production_switched": false,
+  "candidate": {
+    "episodes": 1,
+    "turns": 7,
+    "query": 7,
+    "message": 7,
+    "tool_call": 94,
+    "tool_result": 94,
+    "events": 202
+  },
+  "result": {
+    "http_status": 200,
+    "finish_reason": "tool_calls",
+    "usage": {
+      "prompt_tokens": 115083,
+      "completion_tokens": 9335,
+      "total_tokens": 124418,
+      "prompt_tokens_details": {
+        "cached_tokens": 114944
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 5331
+      },
+      "prompt_cache_hit_tokens": 114944,
+      "prompt_cache_miss_tokens": 139
+    },
+    "accepted": true,
+    "characters": 8224,
+    "headings": [
+      "背景",
+      "发生了什么",
+      "判断与处理",
+      "结果与待确认"
+    ]
+  },
+  "request_and_raw_output_verified": true,
+  "remote_bytes_match": true,
+  "offline_format_probe": {
+    "original_responses": 9,
+    "original_strictly_accepted": 6,
+    "additional_complete_responses_recoverable_without_rewriting": 2,
+    "truncated_response_recoverable": false,
+    "intentional_rejection_cases_passed": 5,
+    "probe_only": true
+  },
+  "semantic_review": {
+    "scope": "single failed-candidate Stage 2 replay; not a new full Stage 1+2 benchmark",
+    "verdict": "acceptable_as_historical_reference_with_unchanged_stage1_limits",
+    "findings": [
+      "保留过期镜像导致stream机制误判及后续撤回。",
+      "保留grp_6619日志证据被助手承认编造并撤回，不作为真实故障证据继续引用。",
+      "保留扩marker与改默认非流式的讨论、严格匹配param=stream的实施、回归与PR合并部署。",
+      "未把部署文件与测试通过写成生产实际触发自动降级并出图的验收。",
+      "skill发布被阻塞仅保留必要交叉背景，没有把发布排查整条搬入主线。",
+      "普通细节和末尾重复较多，属可后续调优；本次不按可直接执行的操作手册标准要求。"
+    ],
+    "limits": [
+      "仅一次随机生成，不能证明提高额度是成功的原因。",
+      "第一阶段未重跑；其他任务漏挂纠正的问题仍在。",
+      "没有进行外部事实核验或未来任务检索benchmark。"
+    ]
+  },
+  "private_artifact_hashes": {
+    "replay-60k/call.json": "8da9cde9b32daf5084650377a11bd8813962793eb96b9541acd21bd7cdd779fe",
+    "replay-60k/episode.json": "2c9c3445f555738ef3c3b6e846b80af5e7e5ac98fb137b454d80ec5d7acca50e",
+    "replay-60k/generation-input.json": "361f6a66603e164fb7c9faded5398a19a5a6abe3e478b16cb618766ec1250022",
+    "replay-60k/manual-review.json": "e12ffe64ee17e83a49d88ff91e2cc29d76bfbd0154c6f2f07e20452be9c24a3c",
+    "replay-60k/memory.md": "7a59e6570fd132f4358887ec17a9ac9233e1a39ccb5c1530b7689d409bc73923",
+    "replay-60k/model-output.json": "1e20ac4c9ae7360b7b3ad1304671e176c23526f0401500793541efecdd906dee",
+    "replay-60k/provenance.json": "931f0d3855e212ee74c44efa37a24dac9d7c10293584120d00966043ed9ce1b2",
+    "replay-60k/request.json": "1980994ba7085e2893950aad851a70666d4e36f965accf023a2302408d00d0d2",
+    "replay-60k/result.json": "e3b3609453751b97c38f25210603d99db29cd06379f01ead7af5802af5b47bf8",
+    "format-recovery-probe.json": "6015dce904bdcb4c59d555f758fa5d1a6b21cb86ef2705eab37665fd3bec1dc6"
+  }
+}

@@ -114,3 +114,16 @@ it("acknowledges the valid prefix before stopping at an oversized record", async
   expect(calls).toBe(1);
   expect(JSON.parse(await readFile(s.state, "utf8")).offset).toBe(s.raw.length);
 });
+
+it("automatically submits a complete acknowledged log snapshot once and retries a lost processing ACK",async()=>{
+  const s=await setup();await writeFile(s.file,s.raw);let completeCalls=0;let fail=true;
+  const send:any=async(url:string,init:any)=>{
+    const body=JSON.parse(init.body);
+    if(url.endsWith("/complete")){completeCalls++;expect(body.end_offset).toBe(s.raw.length);if(fail)throw Error("lost complete ACK");return Response.json({run_id:"run-fixed"});}
+    return Response.json({next_offset:s.raw.length,records:[]});
+  };
+  await expect(uploadOnce({...s.config,process:true},s.state,send)).rejects.toThrow(/lost/);
+  expect(JSON.parse(await readFile(s.state,"utf8")).offset).toBe(s.raw.length);
+  fail=false;expect((await uploadOnce({...s.config,process:true},s.state,send)).run_id).toBe("run-fixed");
+  await uploadOnce({...s.config,process:true},s.state,send);expect(completeCalls).toBe(2);
+});

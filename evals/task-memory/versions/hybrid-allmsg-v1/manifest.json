@@ -1,0 +1,119 @@
+{
+  "version": "hybrid-allmsg-v1",
+  "status": "frozen-evaluated-iteration-baseline",
+  "production_accepted": false,
+  "composition": {
+    "stage1": "frozen baseline partition",
+    "stage2": "frozen context-purpose Markdown generation"
+  },
+  "model": "deepseek-flash",
+  "thinking": {
+    "type": "enabled"
+  },
+  "max_tokens": 60000,
+  "max_attempts": 3,
+  "input": {
+    "stage1": "all native public queries and messages, no tools or hidden reasoning",
+    "stage2": "union of complete assigned original aggregate turns including tools"
+  },
+  "candidate_episode_count_per_thread": 1,
+  "relations_used_for_expansion": false,
+  "event_pruning": false,
+  "extra_model_review": false,
+  "format_normalization": false,
+  "source_refs": "one mechanically appended candidate Episode ID",
+  "prompts": {
+    "stage1": "e7caf0f38fd72bc0a63772308ee5b182fab0b1d694412977e62b189c5fe0e676",
+    "stage2": "98431985c5596f0c24498c2cf762c7a200645fcf997c5fc7e3616177c61e5542"
+  },
+  "files_sha256": {
+    "hybrid.request-template.json": "e384a2911d1ef76e89d1bb68e3342bb038d16f227bd71e59435e924fc45f8f4c",
+    "hybrid.memory-system.json": "4c75d9e33764b4f94f2a855cf37080a0cabc522acdec94731f6ea72fc06ae469",
+    "hybrid.memory-tool.json": "e1f240c27dabbd01e305216b3c1eb314291509bcbe0cbc53267d7acabe4313ec"
+  },
+  "runtime": {
+    "base_revision": "0d2c554e0bb8eae6da0a1bfe9d466bd8a3bcb6c3",
+    "runner_revision": "61e2c46934fca65af5357829852a5d8fd1630e94",
+    "runner_sha256": "661eea33aa4421d920bb4267f9a1a562480d843bea066137019b3caf7b927eea",
+    "builder_sha256": "ab5996fcb10219be1d46e9b2e6c9784999414822e043fee1bce8bdbc3b33c23d",
+    "modules": {
+      "model": "a5b0b777c83345b5caa44341ecf3954f7b88fee9acea31eb5babf275b5384bdb",
+      "output": "29738a48a720493af50e3e0c7480e5e5888374981827351f13c53810b0d87ee4",
+      "memory-output": "57f3ba214b35786a7e381691340fe05b55a0f64184d1f501d2203b2825b3e75d"
+    }
+  },
+  "sources": {
+    "code": {
+      "native": "3fb0d48eb054a2da9cd0d977b9d10a862d2f254b2729350207a4e97b08193777",
+      "snapshot": "941841c1a1006b229a901eb3a3a51a78dc5d5e9184dd84b8de7d4923abe01de7",
+      "events": 326
+    },
+    "noncode": {
+      "native": "6c93bfb98fdedce0facb2300e84d392a68bd5ffd91b702c47636d7994cd3bb08",
+      "snapshot": "93a9a48318b39a403f0dd0320843ab414908e3ffd68d023123e75bdb3a22368e",
+      "events": 84
+    }
+  },
+  "result": {
+    "completed": 7,
+    "failed": 0,
+    "partitions": [
+      {
+        "version": "hybrid",
+        "label": "code",
+        "failed": false
+      },
+      {
+        "version": "hybrid",
+        "label": "noncode",
+        "failed": false
+      }
+    ],
+    "finished_at": "2026-11-09T15:10:01.675Z",
+    "result_manifest_sha256": "e071cc83f5c22dda0d40ff2dd2f9e52cdb10dac4257b09c9b8e980cb91442938",
+    "result_files_sha256": {
+      "hybrid/code/stage1-calls.json": "3a1a01a4961a5a595d85e78470236333987f7b1e74eb9da4f0041cd6214040b8",
+      "hybrid/code/stage1-output.json": "287172eed3b0e9dccde7b6fba851b533f0fb3aaee759dcb91add951084673847",
+      "hybrid/code/threads/1/episode.json": "32ab0f91823533dfaeed650597bfd704df7d132dc800775a3b58c52ecd9fd715",
+      "hybrid/code/threads/1/generation-input.json": "7dd239676c38bb8b7d7d81cfe7564180d3e5855bb0741b6116deaeadb2ee9e37",
+      "hybrid/code/threads/1/generation-calls.json": "e01fb682c26d9f746ed3533368528bcb39e95ffc04a18124bc84bbf63f43236d",
+      "hybrid/code/threads/1/model-output.json": "3663401f539b2ba9cfe6a19f09305e7b9339f0662542132e5f9bdfafa556de2d",
+      "hybrid/code/threads/1/memory.md": "7cb6a151c9f14d553a70bb6889b88e71312772cb9809f3bf5daece2f198c94df",
+      "hybrid/code/threads/2/episode.json": "91fa28a80b48e430d18bfec6eb5923015172f25e2c91700404bb90fe4b38cafd",
+      "hybrid/code/threads/2/generation-input.json": "a69dc8331cc537b1d5669b9c133ad709f5adda23c5a31815d8f301d1cb1a86cf",
+      "hybrid/code/threads/2/generation-calls.json": "eabf44710cf3c75d6bf199dfc3163f7f88da71cbf7a23949ccbe259a2d9ee06c",
+      "hybrid/code/threads/2/model-output.json": "61bdbd6144642e9a8bff3b5c743b8e52eb7bd5568b29029e7d6590f82e59ce36",
+      "hybrid/code/threads/2/memory.md": "aa14d89c4fb04b18bce53048dc5e9cab3940ef2416ffd180810827b334945183",
+      "hybrid/code/threads/3/episode.json": "a3a29da4a23a495f599aa7a345bf49871aff372e1d4a9bf0dae48702ac00330e",
+      "hybrid/code/threads/3/generation-input.json": "eeb197f2964125ee1c1416ff68443b440391a3a64a4df0fdbb4db3f3512dd7ca",
+      "hybrid/code/threads/3/generation-calls.json": "e9d852b22ec84a4ad7808a0a00bb19bde2eafa2666d198edfbd9560e0faf43d2",
+      "hybrid/code/threads/3/model-output.json": "54720f8a7e3d43990a3a0bda5010ae41ab73825def679e656f603d5ea8b1f394",
+      "hybrid/code/threads/3/memory.md": "cdc09971b070a857926752624f0910900dda6a3b04edd6983fb3a79e6d659e6a",
+      "hybrid/code/threads/4/episode.json": "d4e6bfb184ba7ef22c7b17d7da49d50ee023931d7354bcc4fbd0a5e3e539df2d",
+      "hybrid/code/threads/4/generation-input.json": "dbbaae9dd941e4e12a295701aceae8e8eac05f14ba8e31dd0d84367dde8a5bda",
+      "hybrid/code/threads/4/generation-calls.json": "fab0fa2150d727642c17dc7fa6f786efd0b61619f3626d9ea62a8c8ca17c0cb8",
+      "hybrid/code/threads/4/model-output.json": "8d10e7f9ce0e5494aff5286f0320b72956c60a456a311a22a26d942f0dd8e1e0",
+      "hybrid/code/threads/4/memory.md": "ee83df83fef9d1dd1e56e93f5a88b18a37435e7a44daef2281b702effc4f5f2f",
+      "hybrid/code/threads/5/episode.json": "9acb91f4906e4a2a67c7760e1f044cb1371e591f20bb374909b74a900fae8aa1",
+      "hybrid/code/threads/5/generation-input.json": "319c52eb86b6c49f4188f511e042008827debe108bfb8312ea429a77774e783c",
+      "hybrid/code/threads/5/generation-calls.json": "d3e19d1b2cb1c0c1486e017a6787b3fea602d141ce028376da3d6c06444b0d91",
+      "hybrid/code/threads/5/model-output.json": "b79152a5d4d9f6a8c49749c2f440f5c9fa6a63187e0d38c8ad37517aa46f5f24",
+      "hybrid/code/threads/5/memory.md": "e4ad64dacaafabd62682b8cc47102596fde782a82ed0274a63cd149d89600f3e",
+      "hybrid/code/metrics.json": "dd734641d3f4da917f6bb25b28c50948e0fbd28e1f520bef1105505213dc9974",
+      "hybrid/noncode/stage1-calls.json": "ff91ceb9de6f1c3e1701ea8bcde106983bdd2bcd4ff254f22f580d9c287b6448",
+      "hybrid/noncode/stage1-output.json": "37d59bf67dcf56350806d18c2d508aa56565245c536cb702635aef5d4d5be225",
+      "hybrid/noncode/threads/1/episode.json": "9e6ca7ac3ed200fe31d5626dc69c28f4abffa603b2892358f73c64ad8baccb3b",
+      "hybrid/noncode/threads/1/generation-input.json": "290dd0ae0d428177a1b505705840e1fa2ee82631eda9b4e30d9fab83bf1488e4",
+      "hybrid/noncode/threads/1/generation-calls.json": "2ff1dd071d1e6c97c8659eedf3ddba955e2323ac5b80946e1e08c5a31168ba71",
+      "hybrid/noncode/threads/1/model-output.json": "ffab5022002f0a5301d90c4138a923094334045ce32006e22079d13d5ae5c2aa",
+      "hybrid/noncode/threads/1/memory.md": "d59d6d75788e0e8b1acfc0ff83482720d9ad974dc78c85c448ad113ab3046382",
+      "hybrid/noncode/threads/2/episode.json": "b14a8903670ece34451eee6d7c52fdaf1d8fa5c08eb7d42c13edcf5d27a490ef",
+      "hybrid/noncode/threads/2/generation-input.json": "6ace4fc916d16f8d85f813d72b1489a49c6f554bc2ba3de5a39adbd8a489cd1c",
+      "hybrid/noncode/threads/2/generation-calls.json": "36cb3f9e8c18518648e88e22ce670f288a744642ae3a48c23b576e2cf25c87ee",
+      "hybrid/noncode/threads/2/model-output.json": "56d7466951f5e5390f42b59e72aac94aa0085709310eaabe778bcbb7e21442b0",
+      "hybrid/noncode/threads/2/memory.md": "4a4cce6ebefda164fde22807c70db31c9f51e315d764bae3099acc719db22afe",
+      "hybrid/noncode/metrics.json": "c382f1079edca564bc46a1d247abd990de71246a521480b0262c9eba8c7f5aca"
+    },
+    "report": "../../results-hybrid-allmsg-20261109.md"
+  }
+}

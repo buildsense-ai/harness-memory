@@ -99,3 +99,13 @@ describe("log adapters", () => {
     );
   });
 });
+
+it("preserves native XiaoBa intermediate messages, tool identity, source fields and ignores injected records", () => {
+  const messages=[{role:"user",content:"任务"},{role:"assistant",content:"先检查",tool_calls:[{id:"c1",type:"function",function:{name:"shell",arguments:"{}"}}]},{role:"tool",tool_call_id:"c1",content:"结果"},{role:"assistant",content:"完成"}];
+  const records=messages.map(m=>projectRecord("xiaoba",Buffer.from(JSON.stringify(m)+"\n")));
+  expect(records.flatMap(r=>r.events.map(e=>e.kind))).toEqual(["query","message","tool_call","tool_result","message"]);
+  expect(records[1].events[1].content).toEqual(messages[1].tool_calls![0]);
+  expect(records[1].events[1].pointer).toBe("/tool_calls/0");
+  expect(records[1].events[0].fidelity).toBe("native_recorded");
+  expect(projectRecord("xiaoba",Buffer.from(JSON.stringify({role:"assistant",content:"合成摘要",__checkpointSummary:true}))).events).toEqual([]);
+});

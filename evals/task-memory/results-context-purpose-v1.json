@@ -1,0 +1,251 @@
+{
+  "version": "context-purpose-v1",
+  "evaluated_commit": "fb3e6ba20826d08a2ce0f4067c062ad300eda0f0",
+  "provenance": {
+    "revision": "fb3e6ba20826d08a2ce0f4067c062ad300eda0f0",
+    "tracked_changes": "",
+    "model": "deepseek-flash",
+    "thinking": {
+      "type": "enabled"
+    },
+    "max_tokens": 30000,
+    "script_sha256": "41240683269f27ece679c4c87d31a6e8113931a7d5e8742931c05ad9feac344e",
+    "memory_prompt_sha256": "7e33ea6fe64726e3b52a54d290102e9cf6989180f913c61f24ec508c347f322b",
+    "partition_module_sha256": "23b082b55602765bf6f58372341745660f8bc725bbb4a0cdc09fdd3f4a05333f",
+    "source_sha256": {
+      "code": "941841c1a1006b229a901eb3a3a51a78dc5d5e9184dd84b8de7d4923abe01de7",
+      "noncode": "93a9a48318b39a403f0dd0320843ab414908e3ffd68d023123e75bdb3a22368e"
+    }
+  },
+  "overall": "needs_revision",
+  "accepted_documents": 6,
+  "attempted_threads": 7,
+  "production_switched": false,
+  "ci": {
+    "typescript_tests": 31,
+    "python_deployment_tests": 4,
+    "build": "passed",
+    "run_url": "https://github.com/buildsense-ai/harness-memory/actions/runs/42588834810"
+  },
+  "samples": {
+    "code": {
+      "source_events": 278,
+      "source_turns": 10,
+      "thread_count": 4,
+      "candidate_episodes": 4,
+      "covered_events": 278,
+      "coverage_ratio": 1,
+      "extra_memberships": 40,
+      "overlap_ratio": 0.14388489208633093,
+      "accepted_documents": 3,
+      "first_attempt_stage2_prompt_tokens": 199604,
+      "all_attempts_stage2_prompt_tokens": 496770,
+      "provenance_and_available_outputs_checked": true,
+      "all_threads_accepted": false,
+      "threads": [
+        {
+          "ordinal": 1,
+          "turns": [
+            1,
+            2
+          ],
+          "events": 56,
+          "episode_count": 1,
+          "status": "completed",
+          "attempts": 1,
+          "document_sha256": "c87c683d308cf17e134cf23033180fd4cb3f68f33c0872434057ebac06066659"
+        },
+        {
+          "ordinal": 2,
+          "turns": [
+            2
+          ],
+          "events": 18,
+          "episode_count": 1,
+          "status": "completed",
+          "attempts": 1,
+          "document_sha256": "24932adcb08b60660328f04b8156dab7b2864555197ca4b9400c78caf0bd49ea"
+        },
+        {
+          "ordinal": 3,
+          "turns": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "events": 202,
+          "episode_count": 1,
+          "status": "failed",
+          "attempts": 3,
+          "document_sha256": null
+        },
+        {
+          "ordinal": 4,
+          "turns": [
+            9,
+            10
+          ],
+          "events": 42,
+          "episode_count": 1,
+          "status": "completed",
+          "attempts": 1,
+          "document_sha256": "cf2990a67a186d6af9875d6f510765bbe214599f21abb28ad6b44b0147a855b4"
+        }
+      ],
+      "comparison": {
+        "baseline": {
+          "source_events": 278,
+          "coverage_events": 278,
+          "extra_memberships": 22,
+          "overlap_ratio": 0.07913669064748201,
+          "stage2_input_tokens": 180409
+        },
+        "broad": {
+          "source_events": 278,
+          "coverage_events": 278,
+          "extra_memberships": 186,
+          "overlap_ratio": 0.6690647482014388,
+          "stage2_input_tokens": 275375
+        },
+        "narrow": {
+          "source_events": 278,
+          "coverage_events": 278,
+          "extra_memberships": 118,
+          "overlap_ratio": 0.4244604316546763,
+          "stage2_input_tokens": 231408
+        },
+        "context-purpose-v1": {
+          "source_events": 278,
+          "coverage_events": 278,
+          "extra_memberships": 40,
+          "overlap_ratio": 0.14388489208633093,
+          "stage2_input_tokens": 496770
+        }
+      }
+    },
+    "noncode": {
+      "source_events": 72,
+      "source_turns": 10,
+      "thread_count": 3,
+      "candidate_episodes": 3,
+      "covered_events": 72,
+      "coverage_ratio": 1,
+      "extra_memberships": 20,
+      "overlap_ratio": 0.2777777777777778,
+      "accepted_documents": 3,
+      "first_attempt_stage2_prompt_tokens": 268375,
+      "all_attempts_stage2_prompt_tokens": 268375,
+      "provenance_and_available_outputs_checked": true,
+      "all_threads_accepted": true,
+      "threads": [
+        {
+          "ordinal": 1,
+          "turns": [
+            1,
+            2,
+            3
+          ],
+          "events": 28,
+          "episode_count": 1,
+          "status": "completed",
+          "attempts": 1,
+          "document_sha256": "ade7b7f7ffd292c51f82cf4a43b2d9e748455de2ee96120ca5b16afb7f3ba54d"
+        },
+        {
+          "ordinal": 2,
+          "turns": [
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "events": 44,
+          "episode_count": 1,
+          "status": "completed",
+          "attempts": 1,
+          "document_sha256": "9d7737fc48822f151d4ef5b66ef25f3c001d391f8bc790050653528171d33cef"
+        },
+        {
+          "ordinal": 3,
+          "turns": [
+            5,
+            6,
+            7
+          ],
+          "events": 20,
+          "episode_count": 1,
+          "status": "completed",
+          "attempts": 1,
+          "document_sha256": "5946c0cd6dd4664b4dc965407bcdbe6380d017415f40f8ec4475980acdcb1b73"
+        }
+      ],
+      "comparison": {
+        "baseline": {
+          "source_events": 72,
+          "coverage_events": 72,
+          "extra_memberships": 0,
+          "overlap_ratio": 0.0,
+          "stage2_input_tokens": 202080
+        },
+        "broad": {
+          "source_events": 72,
+          "coverage_events": 72,
+          "extra_memberships": 32,
+          "overlap_ratio": 0.4444444444444444,
+          "stage2_input_tokens": 302006
+        },
+        "narrow": {
+          "source_events": 72,
+          "coverage_events": 72,
+          "extra_memberships": 0,
+          "overlap_ratio": 0.0,
+          "stage2_input_tokens": 202525
+        },
+        "context-purpose-v1": {
+          "source_events": 72,
+          "coverage_events": 72,
+          "extra_memberships": 20,
+          "overlap_ratio": 0.2777777777777778,
+          "stage2_input_tokens": 268375
+        }
+      }
+    }
+  },
+  "failure": {
+    "sample": "code",
+    "attempts": 3,
+    "first_finish_reason": "length",
+    "first_completion_tokens": 30000,
+    "first_reasoning_tokens": 25753,
+    "retry_shape": "arguments nested around expected markdown object",
+    "accepted": false
+  },
+  "findings": [
+    "Stage1 missed a later explicit correction for an earlier mechanism thread despite 100% aggregate source coverage.",
+    "Stage1 still promoted some assistant assumptions into hard requirements.",
+    "Stage2 improved historical attribution and preserved some in-input conflicts, but retained an unconfirmed ownership assertion.",
+    "One long thread failed output transport after three responses; semantic generation success is not equivalent to validated pipeline success."
+  ],
+  "limitations": [
+    "每个快照只跑一次；划分数量、共享率变化不能归因于单条规则或证明统计提升。",
+    "未做外部事实核验；审查源于原始会话，不能据此认定历史商品参数真实。",
+    "未做未来任务检索效果benchmark；已保留grep实体和可追溯Episode，不代表证明任务提升。",
+    "Episode是本地测试清单，server_registered=false；无生产数据写入。"
+  ],
+  "private_artifact_hashes": {
+    "audit.json": "8e71e55f1add58d3ffc5a185bd9083c73a40e2c480156ca53b37645c89787aa9",
+    "run-provenance.json": "28453e4c2e8046f2c7647acbe64e221db33a3ff28548a306486c46321f41b03d",
+    "manual-review.json": "526261572540f0337b27da9e4c82d10d324005bcbc3ca0f8c469795c9fb30097",
+    "stage1-code-review.json": "bd84b80ff5c00632456fcbe87516353174d02a638d808a9dd25ecc6eec9f9bb0",
+    "remote-artifact-hashes.json": "a6736f08a76db9908e7077763d5b0256c906c0b61ba231bacca91015e9b9737c",
+    "report.md": "96b6fdf2903406921cc87d49dca6151bc39486091a712a95c91a332679d766ea",
+    "comparison-four-versions.json": "5e456c006187c6501036a0dbdc43cbb99c04dd63a63ad30285d4cc51606abf5a"
+  }
+}

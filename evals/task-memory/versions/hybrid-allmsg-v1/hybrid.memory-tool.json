@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "submit_memory_document",
+    "description": "提交唯一的 Markdown 任务记忆正文。",
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "markdown"
+      ],
+      "properties": {
+        "markdown": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

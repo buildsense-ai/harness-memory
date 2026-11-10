@@ -79,7 +79,20 @@ export async function uploadOnce(
     throw e;
   }
   await flush();
+  const pending = (await stat(config.file)).size - state.offset;
+  if (config.process && state.offset > 0 && pending === 0 && state.processed_offset !== state.offset) {
+    const response = await send(config.url.replace(/\/$/, "") + "/v1/ingest/complete", {
+      method: "POST", headers: { authorization: "Bearer " + config.key, "content-type": "application/json" },
+      body: JSON.stringify({ source_id: state.source_id, stream_id: state.stream_id, end_offset: state.offset, ...(config.leaf_id ? { leaf_id: config.leaf_id } : {}) }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new HttpError(response.status, "processing submission rejected: HTTP " + response.status);
+    const result = await response.json() as { run_id: string };
+    assert(typeof result.run_id === "string", "invalid processing ACK");
+    state.processed_offset = state.offset; state.run_id = result.run_id; await saveState(statePath, state);
+  }
   return {
+    ...(state.run_id ? { run_id: state.run_id } : {}),
     source_id: state.source_id,
     stream_id: state.stream_id,
     next_offset: state.offset,

@@ -20,12 +20,12 @@ assert(
     v.config,
   "usage: upload --config PRIVATE.json --harness xiaoba|pi --file PATH --state PATH [--watch]",
 );
-const { url, key } = JSON.parse(await readFile(v.config, "utf8"));
+const { url, key, process: processMemory = true, leaf_id } = JSON.parse(await readFile(v.config, "utf8"));
 assert(
   typeof url === "string" && typeof key === "string",
   "config requires url/key",
 );
-const config: UploadConfig = { url, key, harness: v.harness, file: v.file };
+const config: UploadConfig = { url, key, harness: v.harness, file: v.file, process: processMemory, leaf_id };
 let stopped = false;
 for (const s of ["SIGTERM", "SIGINT"])
   process.on(s, () => {

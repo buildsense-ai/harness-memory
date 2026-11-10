@@ -1,6 +1,8 @@
+import { searchMemories } from "./memories.js";
+import { MemoryRunner } from "./extraction/memory-runner.js";
 import Fastify from "fastify";
 import type { Pool } from "pg";
-import { HttpError, assert } from "./contracts.js";
+import { assert } from "./contracts.js";
 import { authenticate } from "./db/projects.js";
 import { ingestBatch } from "./ingest.js";
 import { readReference, readRaw } from "./read.js";
@@ -11,14 +13,18 @@ export async function buildApp({
   pool,
   model,
   budget = 65536,
+  memoryBudget = 4 * 1024 * 1024,
 }: {
   pool: Pool;
   model?: ChatModel;
   budget?: number;
+  memoryBudget?: number;
 }) {
   const app = Fastify({ bodyLimit: 4 * 1024 * 1024, logger: false });
   const runner = new ExtractionRunner(pool, model, budget);
-  app.addHook("onClose", async () => runner.wait());
+  const memory = new MemoryRunner(pool, model, memoryBudget);
+  app.addHook("onReady", async () => memory.initialize());
+  app.addHook("onClose", async () => { await memory.close(); await runner.wait(); });
   app.setErrorHandler((error, _request, reply) => {
     const e = error as Error & { statusCode?: number };
     const status = e.statusCode ?? 500;
@@ -45,11 +51,17 @@ export async function buildApp({
       api.post("/ingest/batches", async (r) =>
         ingestBatch(pool, (r as any).projectId, r.body as any),
       );
+      api.post("/ingest/complete", async (r) => {
+        const request = r.body as any;
+        assert(request && Number.isSafeInteger(request.end_offset) && request.end_offset > 0, "complete requires an acknowledged end_offset");
+        return memory.enqueue((r as any).projectId, request);
+      });
+      api.post("/memories/search", async (r) => searchMemories(pool, (r as any).projectId, r.body as any));
       api.post("/read", async (r) =>
         readReference(pool, (r as any).projectId, r.body as any),
       );
       api.post("/extractions", async (r) =>
-        runner.start((r as any).projectId, r.body as any),
+        model?.memory ? memory.enqueue((r as any).projectId, r.body as any) : runner.start((r as any).projectId, r.body as any),
       );
       api.get<{ Params: { id: string } }>("/extractions/:id", async (r) =>
         runner.get((r as any).projectId, r.params.id),
