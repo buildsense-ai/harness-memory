@@ -104,7 +104,8 @@ export class ExtractionRunner {
         "select id episode_ref,goal,thread_id,task_thread,evidence_coverage,chunk_id,missing_pair_refs from episodes where project_id=$1 and run_id=$2 order by id",
       [p, id],
     );
-    return { ...r, episodes: eps.rows };
+    const documents = (await this.pool.query("select id memory_id,thread_id,episode_id from memory_documents where project_id=$1 and run_id=$2 order by thread_id",[p,id])).rows.map(d => ({ memory_id: d.memory_id, thread_id: d.thread_id, source_refs: [d.episode_id] }));
+    return { ...r, episodes: eps.rows, documents };
   }
   async wait() {
     await this.active;

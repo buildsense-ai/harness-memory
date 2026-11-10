@@ -5,12 +5,13 @@ import { configuredModel } from "./extraction/model.js";
 const pool = createPool();
 await migrate(pool);
 await pool.query(
-  "update extraction_runs set status='interrupted',error='service restarted; rerun manually' where status='running'",
+  "update extraction_runs set status='interrupted',error='service restarted; rerun manually' where status='running' and memory_request is null",
 );
 const app = await buildApp({
   pool,
   model: configuredModel(),
   budget: Number(process.env.MODEL_INPUT_BUDGET ?? 65536),
+  memoryBudget: Number(process.env.MEMORY_INPUT_BUDGET ?? 4194304),
 });
 await app.listen({
   host: process.env.HOST ?? "127.0.0.1",

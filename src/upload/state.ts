@@ -6,12 +6,16 @@ export interface UploadConfig {
   key: string;
   harness: Harness;
   file: string;
+  process?: boolean;
+  leaf_id?: string;
 }
 export interface UploadState {
   fingerprint: string;
   source_id: string;
   stream_id: string;
   offset: number;
+  processed_offset?: number;
+  run_id?: string;
 }
 export async function saveState(path: string, state: UploadState) {
   await mkdir(dirname(resolve(path)), { recursive: true });
