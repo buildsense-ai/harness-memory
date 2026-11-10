@@ -7,7 +7,7 @@ All `/v1` endpoints require `Authorization: Bearer PROJECT_KEY`; the Key determi
 | POST /v1/ingest/batches | source_id, stream_id, harness, records | Durable ACK and stable raw/event references |
 | POST /v1/extractions | source_id, stream_id, optional start_offset/end_offset/leaf_id | run_id; 409 if busy, 503 if no model |
 | GET /v1/extractions/:id | — | status, input_refs, task_partition, error, episodes |
-| POST /v1/episodes/search | keywords[], optional operator AND/OR, limit | Episode hits and original snippets |
+| POST /v1/episodes/search (deprecated) | keywords[], optional operator AND/OR, limit | Legacy Episode hits and original snippets; not the Markdown memory search |
 | POST /v1/read | ref, optional offset/limit | One original event or one episode page |
 | GET /v1/raw/:ref | — | Raw bytes; x-content-sha256 header |
 
@@ -29,7 +29,7 @@ Read examples:
 
 Episode output includes the compatibility `goal` description, `thread_id`, `task_thread`, `evidence_coverage`, `chunk_id`, `total_events`, `events`, `missing_pair_refs` and `next_offset` (`null` at end). `missing_pair_refs` lists selected tool calls/results whose counterpart was absent from the fixed extraction input; it does not invent missing evidence. Limit defaults to 20 and must be 1–50. Each event includes content, source pointer, raw_ref, source offset and fidelity. Event content is the original field value; the raw endpoint returns the exact source bytes. Task-thread and coverage fields are generated metadata, not original evidence. Reading a large single event returns its full recorded content.
 
-Search example:
+Legacy Episode search example (deprecated; retained for compatibility, not used by the new Markdown memory search):
 
 ```json
 {"keywords":["上传","8460"],"operator":"AND","limit":10}
