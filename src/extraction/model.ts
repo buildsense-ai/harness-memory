@@ -396,7 +396,7 @@ export class CompatibleChatModel implements ChatModel {
       const response = await fetch(this.config.baseUrl.replace(/\/$/, "") + "/chat/completions", {
         method: "POST",
         headers: { authorization: "Bearer " + this.config.key, "content-type": "application/json" },
-        body: JSON.stringify({ model: this.config.model, thinking: { type: "enabled" }, messages, tools: [tool], max_tokens: this.config.maxOutputTokens }),
+        body: JSON.stringify({ model: this.config.model, thinking: { type: "enabled" }, reasoning_effort: "max", messages, tools: [tool], max_tokens: this.config.maxOutputTokens }),
         signal: AbortSignal.timeout(120000),
       });
       const data = (await response.json()) as any;

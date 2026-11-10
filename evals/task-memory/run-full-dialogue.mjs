@@ -35,7 +35,7 @@ for(const version of versions){
 if(versions.some(v=>JSON.stringify(templates[v].tools)!==JSON.stringify(templates[versions[0]].tools))) throw Error('Stage 1 schemas differ');
 save(provenance,{
   revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),
-  model:config.model,thinking:{type:'enabled'},max_tokens:60000,max_attempts:3,
+  model:config.model,thinking:{type:'enabled'},reasoning_effort:'max',max_tokens:60000,max_attempts:3,
   all_public_messages:true,stage2_tools:true,candidate_unit:'union of complete original aggregate turns',
   extra_model_review:false,format_normalization:false,production_write:false,
   script_sha256:hash(fs.readFileSync(new URL(import.meta.url))),
@@ -98,7 +98,7 @@ async function generate(job){
   console.log(JSON.stringify({version,label,thread:metric.thread_id,stage:'memory',status:'started',events:c.events.length}));
   try{
     for(let attempt=0;attempt<3;attempt++){
-      const request={model:config.model,thinking:{type:'enabled'},messages:structuredClone(messages),tools:[memoryTool],max_tokens:60000};
+      const request={model:config.model,thinking:{type:'enabled'},reasoning_effort:'max',messages:structuredClone(messages),tools:[memoryTool],max_tokens:60000};
       const start=Date.now();
       const response=await realFetch(config.baseUrl.replace(/\/$/,'')+'/chat/completions',{
         method:'POST',headers:{authorization:'Bearer '+config.key,'content-type':'application/json'},

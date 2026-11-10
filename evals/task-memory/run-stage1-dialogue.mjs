@@ -23,7 +23,7 @@ for (const label of ['code','noncode']) {
 const templates = Object.fromEntries(['current','baseline'].map(version => [version, JSON.parse(fs.readFileSync(path.join(root, version + '.request-template.json')))]));
 if (JSON.stringify(templates.current.tools) !== JSON.stringify(templates.baseline.tools)) throw Error('Output tool schemas differ');
 save(immutable, {
-  model, thinking: { type:'enabled' }, max_tokens:60000,
+  model, thinking: { type:'enabled' }, reasoning_effort:'max', max_tokens:60000,
   run_order:['current/code','current/noncode','baseline/code','baseline/noncode'],
   current_prompt_commit:'fb3e6ba20826d08a2ce0f4067c062ad300eda0f0',
   baseline_tag:'memory-eval-20261108-baseline',

@@ -28,6 +28,7 @@ it("returns every bad query ID and missing anchor in one tool error, then accept
   }));
   expect(await model().partition(events)).toEqual(good);
   expect(requests).toHaveLength(2);
+  expect(requests.every(request => request.reasoning_effort === "max" && request.thinking.type === "enabled")).toBe(true);
   const error = JSON.parse(requests[1].messages.at(-1).content);
   expect(error.issues).toEqual(expect.arrayContaining([
     expect.objectContaining({ path: "/query_assignments/0/query_ref", code: "unknown_query_ref", received: "evt_probe_a" }),

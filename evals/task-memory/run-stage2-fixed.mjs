@@ -36,6 +36,7 @@ for(const label of ['code','noncode']){
 fs.mkdirSync(root,{recursive:true});
 save(path.join(root,'system.json'),system);
 const provenance={variant:'faithful-record-v1',revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),model:MODEL_NAME,thinking:{type:'enabled'},max_tokens:60000,max_attempts:3,stage1_rerun:false,fixed_stage1:'hybrid-allmsg-v1 actual 2026-11-09 outputs',extra_model_review:false,auxiliary_evidence:false,production_write:false,prompt_sha256:hash(prompt),runner_sha256:hash(fs.readFileSync(new URL(import.meta.url))),modules:Object.fromEntries(['output','memory-output'].map(n=>[n,hash(fs.readFileSync(new URL('../../dist/src/extraction/'+n+'.js',import.meta.url)))])),jobs:jobs.map(({label,thread,input_sha256,user_content_sha256,baseline_markdown_sha256})=>({label,thread_id:thread.thread_id,title:thread.title,input_sha256,user_content_sha256,baseline_markdown_sha256}))};
+provenance.reasoning_effort='max';
 save(path.join(root,'provenance.json'),provenance);
 const metrics=[];
 async function generate(job){
@@ -50,7 +51,7 @@ async function generate(job){
   const messages=[structuredClone(system),structuredClone(user)],calls=[];
   try{
     for(let attempt=0;attempt<3;attempt++){
-      const request={model:MODEL_NAME,thinking:{type:'enabled'},messages:structuredClone(messages),tools:[memoryTool],max_tokens:60000};
+      const request={model:MODEL_NAME,thinking:{type:'enabled'},reasoning_effort:'max',messages:structuredClone(messages),tools:[memoryTool],max_tokens:60000};
       const started=Date.now();
       const response=await fetch(MODEL_BASE_URL.replace(/\/$/,'')+'/chat/completions',{
         method:'POST',headers:{authorization:'Bearer '+MODEL_API_KEY,'content-type':'application/json'},

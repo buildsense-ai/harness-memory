@@ -6,6 +6,16 @@ output schemas, parameters and source/result hashes. Its tag is
 `memory-eval-20261109-hybrid-v1`. See its result review for remaining semantic
 limitations; this anchor does not deploy or migrate the production pipeline.
 
+From November 10, active product model requests and current all-message/fixed
+evaluation runners explicitly set `reasoning_effort: "max"` with thinking enabled.
+Frozen historical tags/manifests and original reproduction scripts are unchanged.
+The [effort/evidence probe](effort-evidence-v1.md) replays the same seven Stage 2
+candidates with a fresh explicit-high control, max, and max plus temporary source
+excerpts. Its high arm is only a comparison control. Evidence notes are private
+evaluation artifacts; final memory still contains only Markdown and an Episode
+reference. This change does not accept the failed faithful-record prompt or
+deploy the direct-Markdown evaluation route.
+
 This directory freezes the actual two-stage experiment used on 2026-11-08:
 
 1. The repository's `CompatibleChatModel.partition` reads query/message only.
