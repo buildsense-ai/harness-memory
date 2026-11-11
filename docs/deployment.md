@@ -1,6 +1,6 @@
 # Monday deployment
 
-One service, one database, loopback access. Do not modify or restart the existing XiaoBa runtime.
+One service and one database on Monday. The workbench and API are served by that memory system; the browser is only a client. Do not modify or restart the existing XiaoBa runtime.
 
 1. With PostgreSQL 16 installed and 5432 free, run `deploy/bootstrap-db.py` as root. This creates only the `harnessmemory` cluster, the `harness_memory` role, production/test databases and private `/etc/harness-memory/service.env`. The name deliberately has no dash because PostgreSQL's systemd template expands it as a path. Existing credentials are retained on rerun.
 2. Install this repository at `/opt/harness-memory`, run `npm ci` and `npm run build`, create system user/group `harness-memory`.
@@ -8,7 +8,9 @@ One service, one database, loopback access. Do not modify or restart the existin
 4. Copy `deploy/harness-memory.service` into `/etc/systemd/system/`, run `systemctl daemon-reload` and `systemctl enable --now harness-memory`. Confirm `curl http://127.0.0.1:8460/healthz` and `systemctl status harness-memory`.
 5. Create projects with `node --env-file=/etc/harness-memory/service.env dist/src/admin.js project-create NAME`. Save the Key privately, not in service logs or shell arguments. Run upload commands separately with the appropriate log permissions.
 
-Remote access uses `ssh -N -L 8460:127.0.0.1:8460 monday`; no new public listener is required.
+6. Point a DNS name to Monday, obtain a trusted TLS certificate using the host's existing certificate workflow, and add `deploy/nginx-memory-workbench.conf.example` to the active Nginx configuration with the real hostname and certificate paths. Validate with `nginx -t`, then reload Nginx. Open TCP 443 on the server firewall; keep TCP 8460 private to the host. The app serves both `/workbench` and `/v1` on the same origin. The public URL is `https://<hostname>/workbench`.
+
+The browser sends the project Key as a Bearer credential, so the public entry must use HTTPS. Do not expose port 8460 directly over plain HTTP. Confirm both `curl https://<hostname>/healthz` and `https://<hostname>/workbench` from a client outside Monday's network.
 
 Before updates, create a private dump with the service credentials or as postgres:
 
@@ -23,7 +25,7 @@ On restart, unfinished extraction runs become interrupted; raw records and publi
 
 ## Merge-first continuous deployment
 
-`.github/workflows/ci-deploy.yml` runs all TypeScript tests against a fresh PostgreSQL 16 database, builds on Node 20.20.2, and tests the deployment decision logic. PRs never deploy. A passing main push deploys its exact SHA; workflow_dispatch on main can retry a failed deployment. Runs are serialized without canceling an in-progress release.
+`.github/workflows/ci-deploy.yml` runs all TypeScript tests against a fresh PostgreSQL 16 database, builds on Node 20.20.2, and tests the deployment decision logic. PRs never deploy. A passing main push deploys its exact SHA; workflow_dispatch on main can retry a failed deployment. Runs are serialized without canceling an in-progress release. This deploys the app to Monday; Nginx remains the separately configured public HTTPS ingress.
 
 One-time host setup: create `harness-memory-deploy`, with home `/var/lib/harness-memory-deploy` and a shell for SSH forced commands; grant access only to its repository and releases directory. Install `deploy/deploy_main.py` as root-owned `/usr/local/libexec/harness-memory-deploy`, mode 0755. Its sole permitted sudo invocation is that program with a literal `deploy <40-character lowercase SHA>` argument. The script independently validates the argument and requires SHA equality with fetched public origin/main.
 
