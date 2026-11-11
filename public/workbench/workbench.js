@@ -197,6 +197,9 @@
     if (!graph.tasks.length) { root.append(el("div", "empty-state", "本次处理未生成任务。")); return; }
 
     const lanes = el("div", "task-grid");
+    const columns = el("div", "graph-layers");
+    for (const label of ["任务", "Episode", "Markdown 记忆"]) columns.append(el("span", "", label));
+    lanes.append(columns);
     for (const task of graph.tasks) {
       const lane = el("div", "task-lane");
       const taskNode = nodeButton("task-node", task.title || task.desired_outcome || "未命名任务", task.thread_id, state.focusThreadId === task.thread_id, () => showTask(task));
@@ -361,6 +364,13 @@
     for (let i = 0; i < events.length; i++) {
       if (consumed.has(i)) continue;
       const event = events[i];
+      if (event.kind === "tool_result") {
+        const details = el("details", "tool-pair orphan-result"), summary = document.createElement("summary");
+        summary.textContent = "工具结果 · 调用记录不在当前页";
+        details.append(summary, eventCard(event));
+        list.append(details);
+        continue;
+      }
       if (event.kind !== "tool_call") { list.append(eventCard(event)); continue; }
       const details = el("details", "tool-pair"), summary = document.createElement("summary");
       const payload = event.content && typeof event.content === "object" ? event.content : {};
