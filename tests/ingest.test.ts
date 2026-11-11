@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, it, expect } from "vitest";
 import { Pool } from "pg";
 import { migrate } from "../src/db/migrate.js";
-import { createProject, authenticate } from "../src/db/projects.js";
+import { createProject, createProjectKey, authenticate } from "../src/db/projects.js";
 import { ingestBatch } from "../src/ingest.js";
 import { projectRecord } from "../src/adapters/index.js";
 import { readFileSync } from "node:fs";
@@ -38,6 +38,15 @@ it("stores immutable records and returns the same refs on duplicate upload", asy
   ]);
   expect(stored.rows[0].key_hash).not.toBe(p.key);
   await expect(authenticate(pool, "wrong")).rejects.toThrow();
+});
+it("issues an additional project key without invalidating the original", async () => {
+  const p = await createProject(pool, "multi-key");
+  const added = await createProjectKey(pool, p.project_id);
+  expect(added.project_id).toBe(p.project_id);
+  expect(await authenticate(pool, p.key)).toBe(p.project_id);
+  expect(await authenticate(pool, added.key)).toBe(p.project_id);
+  const hash = (await pool.query("select key_hash from project_keys where project_id=$1", [p.project_id])).rows[0].key_hash;
+  expect(hash).not.toBe(added.key);
 });
 it("rejects content conflicts without overwriting and rolls back a mixed batch", async () => {
   const p = await createProject(pool, "conflict"),
