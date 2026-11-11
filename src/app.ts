@@ -16,7 +16,7 @@ import {
   getWorkbenchRunEvents,
   getMemoryDocument,
 } from "./workbench.js";
-import { WORKBENCH_HTML, WORKBENCH_CSS, WORKBENCH_JS } from "./workbench-ui.js";
+import { WORKBENCH_HTML, WORKBENCH_CSS, WORKBENCH_OVERRIDES_CSS, WORKBENCH_JS } from "./workbench-ui.js";
 export async function buildApp({
   pool,
   model,
@@ -31,6 +31,7 @@ export async function buildApp({
   const app = Fastify({ bodyLimit: 4 * 1024 * 1024, logger: false });
   app.get("/workbench", async (_request, reply) => reply.type("text/html; charset=utf-8").send(WORKBENCH_HTML));
   app.get("/workbench.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(WORKBENCH_CSS));
+  app.get("/workbench-overrides.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(WORKBENCH_OVERRIDES_CSS));
   app.get("/workbench.js", async (_request, reply) => reply.type("text/javascript; charset=utf-8").send(WORKBENCH_JS));
   const runner = new ExtractionRunner(pool, model, budget);
   const memory = new MemoryRunner(pool, model, memoryBudget);
