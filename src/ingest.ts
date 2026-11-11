@@ -86,7 +86,7 @@ export async function ingestBatch(
         assert(r.offset === next, "offset conflict", 409);
         id = ref("raw");
         await c.query(
-          "insert into raw_records(id,project_id,source_id,stream_id,offset_bytes,raw,hash,metadata) values($1,$2,$3,$4,$5,$6,$7,$8)",
+          "insert into raw_records(id,project_id,source_id,stream_id,offset_bytes,raw,hash,metadata,received_at) values($1,$2,$3,$4,$5,$6,$7,$8,now())",
           [
             id,
             projectId,
@@ -131,10 +131,17 @@ export async function ingestBatch(
         event_refs: es.rows.map((e) => e.id),
       });
     }
-    await c.query(
-      "update streams set next_offset=$4 where project_id=$1 and source_id=$2 and stream_id=$3",
-      [projectId, b.source_id, b.stream_id, next],
-    );
+    if (next > Number(s.next_offset)) {
+      await c.query(
+        "update streams set next_offset=$4,last_received_at=now() where project_id=$1 and source_id=$2 and stream_id=$3",
+        [projectId, b.source_id, b.stream_id, next],
+      );
+    } else {
+      await c.query(
+        "update streams set next_offset=$4 where project_id=$1 and source_id=$2 and stream_id=$3",
+        [projectId, b.source_id, b.stream_id, next],
+      );
+    }
     await c.query("COMMIT");
     return { next_offset: previousEnd!, records: out };
   } catch (e) {

@@ -9,6 +9,14 @@ import { readReference, readRaw } from "./read.js";
 import { ExtractionRunner } from "./extraction/runner.js";
 import type { ChatModel } from "./extraction/model.js";
 import { searchEpisodes } from "./search.js";
+import {
+  listWorkbenchStreams,
+  listWorkbenchRuns,
+  getWorkbenchGraph,
+  getWorkbenchRunEvents,
+  getMemoryDocument,
+} from "./workbench.js";
+import { WORKBENCH_HTML, WORKBENCH_CSS, WORKBENCH_JS } from "./workbench-ui.js";
 export async function buildApp({
   pool,
   model,
@@ -21,6 +29,9 @@ export async function buildApp({
   memoryBudget?: number;
 }) {
   const app = Fastify({ bodyLimit: 4 * 1024 * 1024, logger: false });
+  app.get("/workbench", async (_request, reply) => reply.type("text/html; charset=utf-8").send(WORKBENCH_HTML));
+  app.get("/workbench.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(WORKBENCH_CSS));
+  app.get("/workbench.js", async (_request, reply) => reply.type("text/javascript; charset=utf-8").send(WORKBENCH_JS));
   const runner = new ExtractionRunner(pool, model, budget);
   const memory = new MemoryRunner(pool, model, memoryBudget);
   app.addHook("onReady", async () => memory.initialize());
@@ -57,6 +68,11 @@ export async function buildApp({
         return memory.enqueue((r as any).projectId, request);
       });
       api.post("/memories/search", async (r) => searchMemories(pool, (r as any).projectId, r.body as any));
+      api.get("/workbench/streams", async (r) => listWorkbenchStreams(pool, (r as any).projectId, r.query as any));
+      api.get("/workbench/runs", async (r) => listWorkbenchRuns(pool, (r as any).projectId, r.query as any));
+      api.get("/workbench/runs/:id/graph", async (r) => getWorkbenchGraph(pool, (r as any).projectId, (r.params as any).id, r.query as any));
+      api.get("/workbench/runs/:id/events", async (r) => getWorkbenchRunEvents(pool, (r as any).projectId, (r.params as any).id, r.query as any));
+      api.get("/memories/:id", async (r) => getMemoryDocument(pool, (r as any).projectId, (r.params as any).id));
       api.post("/read", async (r) =>
         readReference(pool, (r as any).projectId, r.body as any),
       );

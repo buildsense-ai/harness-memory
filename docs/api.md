@@ -2,11 +2,18 @@
 
 All `/v1` endpoints require `Authorization: Bearer PROJECT_KEY`; the Key determines the project. Source names and references never grant access. Unknown and foreign references return 404. `/healthz` only checks service/database health.
 
+`GET /workbench` serves the same-origin inspection UI. The static shell does not grant data access. Enter a project Key in the page; it stays in page memory and is sent only as Bearer authorization.
+
 | Method/path | Input | Result |
 |---|---|---|
 | POST /v1/ingest/batches | source_id, stream_id, harness, records | Durable ACK and stable raw/event references |
 | POST /v1/ingest/complete | source_id, stream_id, acknowledged end_offset, optional leaf_id/start_offset/retry | Durable Markdown processing run_id/status |
 | POST /v1/memories/search | keywords[], optional operator AND/OR, offset, limit<=10 | Complete Markdown documents and Episode source_refs |
+| GET /v1/memories/:id | — | The same complete Markdown and source_refs for one project-owned document, plus run_id and thread_id |
+| GET /v1/workbench/streams | limit, offset | Project-scoped upload streams, byte extent, raw/event counts and known server receipt times |
+| GET /v1/workbench/runs | optional source_id/stream_id, limit, offset | Project-scoped extraction run summaries, including legacy runs |
+| GET /v1/workbench/runs/:id/graph | limit, offset | One page of task, Episode and published memory provenance |
+| GET /v1/workbench/runs/:id/events | optional thread_id, limit, offset | A page of fixed snapshot events or that task's complete selected query turns |
 | POST /v1/extractions | source_id, stream_id, optional start_offset/end_offset/leaf_id | run_id; 409 if busy, 503 if no model |
 | GET /v1/extractions/:id | — | status, input_refs, task_partition, error, episodes |
 | POST /v1/episodes/search (deprecated) | keywords[], optional operator AND/OR, limit | Legacy Episode hits and original snippets; not the Markdown memory search |
@@ -14,6 +21,8 @@ All `/v1` endpoints require `Authorization: Bearer PROJECT_KEY`; the Key determi
 | GET /v1/raw/:ref | — | Raw bytes; x-content-sha256 header |
 
 Upload records contain `{offset,raw_base64,events}`. `raw_base64` contains exactly one original UTF-8 JSONL record including its newline; use the shared uploader/adapters to produce event descriptors. All records in a batch must be contiguous. At the same project/source/stream/offset, identical bytes return the original references; different bytes return 409. Unsupported or malformed records are not skipped.
+
+New `raw_records` rows record server receipt time in `received_at`; `streams.last_received_at` supports the upload-list sort. Older rows retain `NULL`, because their source timestamp does not establish when the server received them. Workbench stream counts describe stored streams and fixed processing runs; they are not an audit of every HTTP upload request.
 
 ## Current Markdown pipeline
 
