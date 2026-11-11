@@ -11,7 +11,10 @@ it("serves the workbench shell and static assets without requiring a database co
     expect(page.headers["content-type"]).toContain("text/html");
     expect(page.body).toContain("id=\"graph\"");
     expect(page.body).toContain("id=\"project-key\"");
+    expect(page.body).toContain("id=\"memory-content\"");
+    expect(page.body).toContain("id=\"source-content\"");
     expect((await app.inject({ method: "GET", url: "/workbench.css" })).headers["content-type"]).toContain("text/css");
+    expect((await app.inject({ method: "GET", url: "/workbench-overrides.css" })).headers["content-type"]).toContain("text/css");
     expect((await app.inject({ method: "GET", url: "/workbench.js" })).headers["content-type"]).toContain("javascript");
   } finally {
     await app.close();
@@ -38,4 +41,6 @@ it("keeps all data endpoints behind the project key", async () => {
 
 it("has browser-valid JavaScript syntax", () => {
   expect(() => new Function(WORKBENCH_JS)).not.toThrow();
+  expect(WORKBENCH_JS).toContain('el("details", "tool-pair")');
+  expect(WORKBENCH_JS).not.toContain("innerHTML");
 });
