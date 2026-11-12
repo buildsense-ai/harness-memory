@@ -5,17 +5,33 @@ import { snapshotEvents, type ExtractionRequest } from "./snapshot.js";
 import { validatePartition, type ChatModel } from "./model.js";
 import { validateMemoryDocument } from "./memory-output.js";
 
-/** Select whole original query turns mechanically. No second event-pruning model. */
-export function candidateEvents(events: StoredEvent[], queryRefs: string[]): StoredEvent[] {
+/** Select complete query-to-query segments, keeping each run's messages and tool pairs together. */
+export function candidateGroups(events: StoredEvent[]) {
   const groups = new Map<string, StoredEvent[]>(), owner = new Map<string, string>();
-  let current: string | undefined, queryRaw: string | undefined;
+  let current: string | undefined, queryRaw: string | undefined, currentRun: string | undefined;
   for (const event of events) {
     if (event.kind === "query") {
-      if (queryRaw !== event.raw_ref) { current = event.ref; queryRaw = event.raw_ref; groups.set(current, []); }
+      if (event.conversation_run_id) {
+        current = event.ref;
+        currentRun = event.conversation_run_id;
+        queryRaw = undefined;
+        groups.set(current, []);
+      } else if (queryRaw !== event.raw_ref) {
+        current = event.ref;
+        currentRun = undefined;
+        queryRaw = event.raw_ref;
+        groups.set(current, []);
+      }
       owner.set(event.ref, current!);
     }
-    if (current) groups.get(current)!.push(event);
+    if (current && (!event.conversation_run_id || event.conversation_run_id === currentRun))
+      groups.get(current)!.push(event);
   }
+  return { groups, owner };
+}
+
+export function candidateEvents(events: StoredEvent[], queryRefs: string[]): StoredEvent[] {
+  const { groups, owner } = candidateGroups(events);
   const selected = new Set(queryRefs.map(q => { assert(owner.has(q), "unknown candidate query"); return owner.get(q)!; }));
   const refs = new Set([...selected].flatMap(q => groups.get(q)!.map(e => e.ref)));
   return events.filter(e => refs.has(e.ref));
@@ -25,7 +41,15 @@ export class MemoryRunner {
   private active: Promise<void> | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
   private closed = false;
-  constructor(private pool: Pool, private model: ChatModel | undefined, private budget = 4 * 1024 * 1024) { assert(Number.isSafeInteger(budget) && budget > 0, "invalid memory budget"); }
+  constructor(
+    private pool: Pool,
+    private model: ChatModel | undefined,
+    private budget = 4 * 1024 * 1024,
+    private runConcurrency = 2,
+  ) {
+    assert(Number.isSafeInteger(budget) && budget > 0, "invalid memory budget");
+    assert(Number.isSafeInteger(runConcurrency) && runConcurrency > 0 && runConcurrency <= 8, "invalid run concurrency");
+  }
   async initialize() {
     if (!this.model?.memory) return;
     // Recover only while holding the same session lock as the worker; do not steal live work.
@@ -42,6 +66,7 @@ export class MemoryRunner {
   async enqueue(p: string, request: ExtractionRequest & { retry?: boolean }) {
     assert(this.model?.memory, "Markdown memory model not configured", 503);
     const events = await snapshotEvents(this.pool, p, request);
+    if (!events.length) return { status: "skipped", reason: "no_normalized_events" };
     this.checkBudget(events.map(({ kind, text, ref }) => ({ kind, text, ref })));
     const signature = sha256(JSON.stringify(events.map(e => e.ref))), id = ref("run");
     const row = (await this.pool.query("insert into extraction_runs(id,project_id,status,input_refs,memory_request,input_signature) values($1,$2,'queued',$3,$4,$5) on conflict(project_id,input_signature) where input_signature is not null do update set input_signature=excluded.input_signature returning id,status", [id,p,JSON.stringify(events.map(e => e.ref)),JSON.stringify(request),signature])).rows[0];
@@ -62,9 +87,16 @@ export class MemoryRunner {
       locked = (await c.query("select pg_try_advisory_lock(846017) locked")).rows[0].locked;
       if (!locked) return;
       while (!this.closed) {
-        const run = (await c.query("update extraction_runs set status='running',error=null where id=(select id from extraction_runs where memory_request is not null and status='queued' order by created_at,id limit 1) returning *")).rows[0];
-        if (!run) break;
-        await this.execute(run);
+        const batch = [];
+        while (batch.length < this.runConcurrency) {
+          const run = (await c.query(
+            "update extraction_runs set status='running',error=null where id=(select id from extraction_runs where memory_request is not null and status='queued' order by created_at,id limit 1 for update skip locked) returning *",
+          )).rows[0];
+          if (!run) break;
+          batch.push(run);
+        }
+        if (!batch.length) break;
+        await Promise.all(batch.map((run) => this.execute(run)));
       }
     } finally { if (locked) await c.query("select pg_advisory_unlock(846017)"); c.release(); }
   }

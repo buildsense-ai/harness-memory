@@ -52,11 +52,36 @@ export async function snapshotEvents(
     boundaries.has(start) && boundaries.has(end),
     "range must use record boundaries",
   );
+  const transcriptRuns = new Set(
+    records
+      .filter((r) => r.record_type === "transcript" && typeof r.run_id === "string")
+      .map((r) => JSON.stringify([r.session_id, r.run_id])),
+  );
+  const inRange = records.filter((r) => Number(r.offset_bytes) >= start && Number(r.offset_bytes) < end);
+  const selectedConversationRuns = new Set(
+    inRange
+      .filter((r) => r.record_type === "transcript" && typeof r.conversation_run_id === "string")
+      .map((r) => r.conversation_run_id),
+  );
+  const completedConversationRuns = new Set(
+    records
+      .filter((r) => r.record_type === "transcript" && r.transcript_event_type === "run_finished")
+      .map((r) => r.conversation_run_id)
+      .filter((id): id is string => typeof id === "string"),
+  );
+  const closedRunsToProcess = new Set(
+    [...selectedConversationRuns].filter((id) => completedConversationRuns.has(id)),
+  );
   const path =
     s.harness === "pi" ? selectPiPath(records, req.leaf_id) : records;
   const rawIds = path
     .filter(
-      (r) => Number(r.offset_bytes) >= start && Number(r.offset_bytes) < end,
+      (r) =>
+        (r.record_type === "transcript" && typeof r.conversation_run_id === "string"
+          ? closedRunsToProcess.has(r.conversation_run_id)
+          : Number(r.offset_bytes) >= start && Number(r.offset_bytes) < end) &&
+        !(r.record_type === "turn" && typeof r.run_id === "string" &&
+          transcriptRuns.has(JSON.stringify([r.session_id, r.run_id]))),
     )
     .map((r) => r.id);
   const rows = await pool.query(
@@ -65,6 +90,5 @@ export async function snapshotEvents(
     [p, rawIds],
   );
   const events = rows.rows.map(eventFromRow);
-  assert(events.length, "snapshot has no message events");
   return events;
 }

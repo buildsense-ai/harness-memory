@@ -66,21 +66,42 @@ export async function ingestBatch(
       );
       previousEnd = r.offset + raw.length;
       assert(Number.isSafeInteger(previousEnd), "offset too large");
+      if (r.origin !== undefined) {
+        assert(
+          r.origin &&
+            typeof r.origin.path === "string" &&
+            r.origin.path.length > 0 &&
+            r.origin.path.length <= 512 &&
+            !r.origin.path.startsWith("/") &&
+            !r.origin.path.includes("\\") &&
+            r.origin.path.split("/").every((part: string) => part && part !== "." && part !== "..") &&
+            Number.isSafeInteger(r.origin.offset) &&
+            r.origin.offset >= 0,
+          "invalid source origin",
+        );
+      }
       const p = projectRecord(b.harness, raw),
         expected = p.events.map(({ content, text, fidelity, ...d }) => d);
-      assert(
-        isDeepStrictEqual(expected, r.events),
-        "event descriptors do not match original",
-      );
+      if (r.events !== undefined)
+        assert(
+          Array.isArray(r.events) && isDeepStrictEqual(expected, r.events),
+          "event descriptors do not match original",
+        );
       const old = (
         await c.query(
-          "select id,hash from raw_records where project_id=$1 and source_id=$2 and stream_id=$3 and offset_bytes=$4",
+          "select id,hash,metadata from raw_records where project_id=$1 and source_id=$2 and stream_id=$3 and offset_bytes=$4",
           [projectId, b.source_id, b.stream_id, r.offset],
         )
       ).rows[0];
       let id: string;
       if (old) {
         assert(old.hash === sha256(raw), "record content conflict", 409);
+        if (r.origin !== undefined)
+          assert(
+            isDeepStrictEqual(old.metadata?.origin, r.origin),
+            "source origin conflict",
+            409,
+          );
         id = old.id;
       } else {
         assert(r.offset === next, "offset conflict", 409);
@@ -99,6 +120,16 @@ export async function ingestBatch(
               native_id: p.native_id,
               parent_id: p.parent_id,
               timestamp: p.timestamp,
+              format_version: p.format_version,
+              record_type: p.record_type,
+              conversation_run_id: p.conversation_run_id,
+              transcript_event_type: p.transcript_event_type,
+              transcript_event_id: p.transcript_event_id,
+              transcript_stream_id: p.transcript_stream_id,
+              transcript_sequence: p.transcript_sequence,
+              session_id: p.session_id,
+              run_id: p.run_id,
+              ...(r.origin ? { origin: r.origin } : {}),
             }),
           ],
         );

@@ -8,12 +8,15 @@ export interface UploadConfig {
   file: string;
   process?: boolean;
   leaf_id?: string;
+  originPath?: string;
+  startOffset?: number;
 }
 export interface UploadState {
   fingerprint: string;
   source_id: string;
   stream_id: string;
-  offset: number;
+  file_offset: number;
+  stream_offset: number;
   processed_offset?: number;
   run_id?: string;
 }
@@ -27,24 +30,27 @@ export async function loadState(
   config: UploadConfig,
   path: string,
 ): Promise<UploadState> {
-  const fingerprint = sha256(
-    JSON.stringify([
-      config.url.replace(/\/$/, ""),
-      sha256(config.key),
-      config.harness,
-      resolve(config.file),
-    ]),
-  );
+  const identity = [config.url.replace(/\/$/, ""), sha256(config.key), config.harness, resolve(config.file)];
+  const legacyFingerprint = sha256(JSON.stringify(identity));
+  const fingerprint = sha256(JSON.stringify([...identity, config.originPath ?? null, config.startOffset ?? 0]));
   try {
     const s = JSON.parse(await readFile(path, "utf8"));
     assert(
-      s.fingerprint === fingerprint &&
-        Number.isSafeInteger(s.offset) &&
-        s.offset >= 0 &&
+      (s.fingerprint === fingerprint || (s.fingerprint === legacyFingerprint && !config.originPath && (config.startOffset ?? 0) === 0)) &&
+        (Number.isSafeInteger(s.file_offset) && s.file_offset >= 0 || Number.isSafeInteger(s.offset) && s.offset >= 0) &&
+        (s.stream_offset === undefined || Number.isSafeInteger(s.stream_offset) && s.stream_offset >= 0) &&
         typeof s.source_id === "string" &&
         typeof s.stream_id === "string",
       "state does not match configuration",
     );
+    if (s.file_offset === undefined) {
+      s.file_offset = s.offset;
+      s.stream_offset = s.offset;
+    } else if (s.stream_offset === undefined) {
+      s.stream_offset = 0;
+    }
+    s.fingerprint = fingerprint;
+    await saveState(path, s);
     return s;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
@@ -52,7 +58,8 @@ export async function loadState(
       fingerprint,
       source_id: ref("src"),
       stream_id: ref("stream"),
-      offset: 0,
+      file_offset: config.startOffset ?? 0,
+      stream_offset: 0,
     };
     await saveState(path, state);
     return state;
