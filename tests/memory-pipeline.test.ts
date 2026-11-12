@@ -108,7 +108,7 @@ it("processes new transcript rows once per source event, groups pending with its
   expect(dialogue.map((e:any)=>e.text)).toEqual(["ROOT_TASK","先读取文件","PENDING_TASK","此前决定保留兼容接口","已按追加要求完成"]);
   expect(dialogue[2]).toMatchObject({input_kind:"pending"});
   expect(dialogue[3]).toMatchObject({source:"memory_branch"});
-  const candidates=s.memory.mock.calls[0][2];
+  const candidates=s.memory.mock.calls.find((call:any[])=>call[0].thread_id==="T1")![2];
   expect(candidates.map((e:any)=>e.kind)).toEqual(["query","message","tool_call","tool_result","query","message","message"]);
   expect(candidates.filter((e:any)=>e.kind==="query").map((e:any)=>e.input_kind)).toEqual(["root","pending"]);
   expect(candidates.find((e:any)=>e.kind==="tool_call").tool_call_id).toBe(candidates.find((e:any)=>e.kind==="tool_result").tool_call_id);
@@ -156,15 +156,16 @@ it("defers a run split across upload windows, then processes the complete origin
 it("processes complete native turns automatically and reads exactly the generated candidate",async()=>{
   const s=await setup(),x=await uploadAndComplete(s);
   expect(x.status.status).toBe("completed");expect(x.status.documents).toHaveLength(2);expect(s.select).not.toHaveBeenCalled();
+  const nativeCandidates=s.memory.mock.calls.find((call:any[])=>call[0].thread_id==="T1")![2];
   expect(s.partition.mock.calls[0][0].map(e=>e.kind)).toEqual(["query","message","message","query","message"]);
   expect(s.partition.mock.calls[0][0].map(e=>e.text)).toContain("先检查实际错误");
-  expect(s.memory.mock.calls[0][2].map((e:any)=>e.kind)).toEqual(["query","message","tool_call","tool_result","message"]);
+  expect(nativeCandidates.map((e:any)=>e.kind)).toEqual(["query","message","tool_call","tool_result","message"]);
   const search=await s.post("/v1/memories/search",{keywords:["上传ABC","路径DEF"]});expect(search.statusCode).toBe(200);expect(search.json().items).toHaveLength(2);
   const doc=search.json().items.find((d:any)=>d.markdown.startsWith("# 任务1")),ep=doc.source_refs[0];expect(doc.markdown).toContain("episode_id: `"+ep+"`");
   let offset:number|null=0;const events:any[]=[];
   while(offset!==null){const r=(await s.post("/v1/read",{ref:ep,offset,limit:2})).json();events.push(...r.events);offset=r.next_offset;}
   expect(events.map(e=>e.ref)).toEqual(x.ack.records.slice(0,4).flatMap((r:any)=>r.event_refs));
-  expect(events.map(e=>e.content)).toEqual(s.memory.mock.calls[0][2].map((e:any)=>e.content));
+  expect(events.map(e=>e.content)).toEqual(nativeCandidates.map((e:any)=>e.content));
   const raw=await s.app.inject({method:"GET",url:"/v1/raw/"+events[0].raw_ref,headers:{authorization:"Bearer "+s.p.key}});
   expect(raw.rawPayload.equals(Buffer.from(x.body.records[0].raw_base64,"base64"))).toBe(true);
   const again=(await s.post("/v1/ingest/complete",x.complete)).json();expect(again.run_id).toBe(x.run);expect(s.partition).toHaveBeenCalledTimes(1);expect(s.memory).toHaveBeenCalledTimes(2);
