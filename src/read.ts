@@ -14,6 +14,8 @@ export function eventFromRow(r: any): StoredEvent {
     native_id: r.raw_metadata?.native_id,
     parent_id: r.raw_metadata?.parent_id,
     timestamp: r.raw_metadata?.timestamp,
+    origin: r.raw_metadata?.origin,
+    format_version: r.raw_metadata?.format_version,
   };
 }
 export const eventSelect =
@@ -21,12 +23,12 @@ export const eventSelect =
 export async function readRaw(pool: Pool, p: string, id: string) {
   const r = (
     await pool.query(
-      "select raw,hash from raw_records where project_id=$1 and id=$2",
+      "select raw,hash,metadata from raw_records where project_id=$1 and id=$2",
       [p, id],
     )
   ).rows[0];
   assert(r, "unknown reference", 404);
-  return { bytes: r.raw as Buffer, sha256: r.hash as string };
+  return { bytes: r.raw as Buffer, sha256: r.hash as string, origin: r.metadata?.origin };
 }
 export async function readReference(
   pool: Pool,

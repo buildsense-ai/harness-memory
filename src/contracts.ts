@@ -7,6 +7,12 @@ export interface Descriptor {
   order: number;
   tool_call_id?: string;
   fields?: string[];
+  conversation_run_id?: string;
+  input_kind?: "root" | "pending";
+  input_ids?: string[];
+  phase?: string;
+  source?: string;
+  sequence?: number;
 }
 export interface ProjectedEvent extends Descriptor {
   content: unknown;
@@ -18,11 +24,21 @@ export interface ProjectedRecord {
   native_id?: string;
   parent_id?: string | null;
   timestamp?: string;
+  format_version?: string;
+  record_type?: string;
+  conversation_run_id?: string;
+  transcript_event_type?: string;
+  transcript_event_id?: string;
+  transcript_stream_id?: string;
+  transcript_sequence?: number;
+  session_id?: string;
+  run_id?: string;
 }
 export interface UploadRecord {
   offset: number;
   raw_base64: string;
-  events: Descriptor[];
+  events?: Descriptor[];
+  origin?: { path: string; offset: number };
 }
 export interface UploadBatch {
   source_id: string;
@@ -37,6 +53,8 @@ export interface StoredEvent extends ProjectedEvent {
   native_id?: string;
   parent_id?: string | null;
   timestamp?: string;
+  format_version?: string;
+  conversation_run_id?: string;
 }
 export interface IngestAck {
   next_offset: number;

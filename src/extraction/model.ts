@@ -138,6 +138,10 @@ const inputView = (events: StoredEvent[]) => events.map((event, source_index) =>
   source_index,
   ref: event.ref,
   kind: event.kind,
+  ...(event.conversation_run_id ? { conversation_run_id: event.conversation_run_id } : {}),
+  ...(event.input_kind ? { input_kind: event.input_kind } : {}),
+  ...(event.phase ? { phase: event.phase } : {}),
+  ...(event.source ? { source: event.source } : {}),
   timestamp: event.timestamp ?? null,
   tool_call_id: event.tool_call_id ?? null,
   text: event.text,
@@ -148,7 +152,16 @@ const dialogueOnly = (events: StoredEvent[]) => events.filter((event) => event.k
 function partitionPayload(events: StoredEvent[]) {
   return {
     dialogue_events: dialogueOnly(events)
-      .map((event, source_index) => ({ source_index, ref: event.ref, kind: event.kind, text: event.text })),
+      .map((event, source_index) => ({
+        source_index,
+        ref: event.ref,
+        kind: event.kind,
+        ...(event.conversation_run_id ? { conversation_run_id: event.conversation_run_id } : {}),
+        ...(event.input_kind ? { input_kind: event.input_kind } : {}),
+        ...(event.phase ? { phase: event.phase } : {}),
+        ...(event.source ? { source: event.source } : {}),
+        text: event.text,
+      })),
   };
 }
 

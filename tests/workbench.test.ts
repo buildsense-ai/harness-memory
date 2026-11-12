@@ -7,6 +7,7 @@ import { migrate } from "../src/db/migrate.js";
 import { ingestBatch } from "../src/ingest.js";
 import { projectRecord } from "../src/adapters/index.js";
 import { ref } from "../src/contracts.js";
+import { getWorkbenchGraph } from "../src/workbench.js";
 
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
 vi.setConfig({ testTimeout: 20000, hookTimeout: 60000 });
@@ -62,7 +63,7 @@ beforeAll(async () => {
     "insert into episodes(id,project_id,run_id,goal,chunk_id,thread_id,task_thread) values($1,$2,$3,$4,'whole-turns','T1',$5)",
     [episodeId, project.project_id, runId, JSON.stringify({ description: taskThread.desired_outcome }), JSON.stringify(taskThread)],
   );
-  for (const [ordinal, eventRef] of eventRefs.entries()) {
+  for (const [ordinal, eventRef] of eventRefs.slice(0, 3).entries()) {
     await pool.query("insert into episode_events(project_id,episode_id,event_id,ordinal) values($1,$2,$3,$4)", [project.project_id, episodeId, eventRef, ordinal]);
   }
   await pool.query(
@@ -89,6 +90,12 @@ it("serves the workbench shell and same-origin assets", async () => {
 });
 
 it("lists project streams and run states without leaking another project", async () => {
+  const sessions = await get("/v1/workbench/sessions");
+  expect(sessions.statusCode).toBe(200);
+  expect(sessions.json().items).toEqual(expect.arrayContaining([
+    expect.objectContaining({ source_id: stream.source_id, session_id: null, stream_id: stream.stream_id, raw_record_count: 1 }),
+  ]));
+  expect((await get("/v1/workbench/sessions", other.key)).json().items).toEqual([]);
   const response = await get("/v1/workbench/streams");
   expect(response.statusCode).toBe(200);
   expect(response.json().items).toEqual(expect.arrayContaining([
@@ -100,16 +107,28 @@ it("lists project streams and run states without leaking another project", async
 });
 
 it("projects stored task, Episode and memory identities and pages the fixed input", async () => {
+  await getWorkbenchGraph(pool, project.project_id, runId, {});
   const graph = await get(`/v1/workbench/runs/${runId}/graph`);
   expect(graph.statusCode).toBe(200);
   expect(graph.json().tasks).toEqual(expect.arrayContaining([
-    expect.objectContaining({ thread_id: "T1", episode: expect.objectContaining({ episode_id: episodeId, memory_id: memoryId }) }),
+    expect.objectContaining({ thread_id: "T1", sessions: [expect.objectContaining({ session_key: expect.any(String) })], episode: expect.objectContaining({ episode_id: episodeId, memory_id: memoryId }) }),
   ]));
   const events = await get(`/v1/workbench/runs/${runId}/events?thread_id=T1&limit=1`);
   expect(events.json().items).toHaveLength(1);
   expect(events.json().next_offset).toBe(1);
   expect((await get(`/v1/workbench/runs/${runId}/graph`, other.key)).statusCode).toBe(404);
   expect((await get(`/v1/workbench/runs/${runId}/events`)).json().total).toBe(4);
+  const context = await get(`/v1/workbench/runs/${runId}/events?thread_id=T1&context=true&limit=100`);
+  expect(context.json()).toMatchObject({ selection_source: "published_episode", episode_id: episodeId, selected_count: 3 });
+  expect(context.json().items.filter((event: any) => event.selected)).toHaveLength(3);
+  expect(context.json().items.some((event: any) => !event.selected)).toBe(true);
+  expect(context.json().items.every((event: any) => event.session_key)).toBe(true);
+  expect(context.json().items.find((event: any) => event.kind === "tool_call")).toMatchObject({ tool_pair_ref: expect.any(String), tool_pair_selected: false });
+  const firstContextPage = await get(`/v1/workbench/runs/${runId}/events?thread_id=T1&context=true&limit=2`);
+  expect(firstContextPage.json()).toMatchObject({ total: 4, selected_count: 3, next_offset: 2 });
+  const secondContextPage = await get(`/v1/workbench/runs/${runId}/events?thread_id=T1&context=true&offset=2&limit=2`);
+  expect(secondContextPage.json().items.some((event: any) => !event.selected)).toBe(true);
+  expect((await get(`/v1/workbench/runs/${runId}/events?thread_id=T1&limit=100`)).json()).toMatchObject({ selection_source: "candidate_preview", total: 4, selected_count: 4 });
 });
 
 it("returns the exact document reference and rejects foreign memory IDs", async () => {

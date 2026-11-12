@@ -11,6 +11,7 @@ import type { ChatModel } from "./extraction/model.js";
 import { searchEpisodes } from "./search.js";
 import {
   listWorkbenchStreams,
+  listWorkbenchSessions,
   listWorkbenchRuns,
   getWorkbenchGraph,
   getWorkbenchRunEvents,
@@ -22,11 +23,13 @@ export async function buildApp({
   model,
   budget = 65536,
   memoryBudget = 4 * 1024 * 1024,
+  memoryRunConcurrency = 2,
 }: {
   pool: Pool;
   model?: ChatModel;
   budget?: number;
   memoryBudget?: number;
+  memoryRunConcurrency?: number;
 }) {
   const app = Fastify({ bodyLimit: 4 * 1024 * 1024, logger: false });
   app.get("/workbench", async (_request, reply) => reply.type("text/html; charset=utf-8").send(WORKBENCH_HTML));
@@ -34,7 +37,7 @@ export async function buildApp({
   app.get("/workbench-overrides.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(WORKBENCH_OVERRIDES_CSS));
   app.get("/workbench.js", async (_request, reply) => reply.type("text/javascript; charset=utf-8").send(WORKBENCH_JS));
   const runner = new ExtractionRunner(pool, model, budget);
-  const memory = new MemoryRunner(pool, model, memoryBudget);
+  const memory = new MemoryRunner(pool, model, memoryBudget, memoryRunConcurrency);
   app.addHook("onReady", async () => memory.initialize());
   app.addHook("onClose", async () => { await memory.close(); await runner.wait(); });
   app.setErrorHandler((error, _request, reply) => {
@@ -70,6 +73,7 @@ export async function buildApp({
       });
       api.post("/memories/search", async (r) => searchMemories(pool, (r as any).projectId, r.body as any));
       api.get("/workbench/streams", async (r) => listWorkbenchStreams(pool, (r as any).projectId, r.query as any));
+      api.get("/workbench/sessions", async (r) => listWorkbenchSessions(pool, (r as any).projectId, r.query as any));
       api.get("/workbench/runs", async (r) => listWorkbenchRuns(pool, (r as any).projectId, r.query as any));
       api.get("/workbench/runs/:id/graph", async (r) => getWorkbenchGraph(pool, (r as any).projectId, (r.params as any).id, r.query as any));
       api.get("/workbench/runs/:id/events", async (r) => getWorkbenchRunEvents(pool, (r as any).projectId, (r.params as any).id, r.query as any));
@@ -91,6 +95,8 @@ export async function buildApp({
         return reply
           .type("application/octet-stream")
           .header("x-content-sha256", data.sha256)
+          .header("x-source-path", data.origin?.path ?? "")
+          .header("x-source-offset", data.origin ? String(data.origin.offset) : "")
           .send(data.bytes);
       });
     },

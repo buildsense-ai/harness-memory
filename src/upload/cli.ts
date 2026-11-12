@@ -11,6 +11,8 @@ const { values: v } = parseArgs({
     state: { type: "string" },
     config: { type: "string" },
     watch: { type: "boolean", default: false },
+    "origin-path": { type: "string" },
+    "start-offset": { type: "string" },
   },
 });
 assert(
@@ -25,7 +27,9 @@ assert(
   typeof url === "string" && typeof key === "string",
   "config requires url/key",
 );
-const config: UploadConfig = { url, key, harness: v.harness, file: v.file, process: processMemory, leaf_id };
+const startOffset = v["start-offset"] === undefined ? 0 : Number(v["start-offset"]);
+assert(Number.isSafeInteger(startOffset) && startOffset >= 0, "invalid --start-offset");
+const config: UploadConfig = { url, key, harness: v.harness, file: v.file, process: processMemory, leaf_id, originPath: v["origin-path"], startOffset };
 let stopped = false;
 for (const s of ["SIGTERM", "SIGINT"])
   process.on(s, () => {

@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { migrate } from "../src/db/migrate.js";
 import { createProject, createProjectKey, authenticate } from "../src/db/projects.js";
 import { ingestBatch } from "../src/ingest.js";
+import { readRaw } from "../src/read.js";
 import { projectRecord } from "../src/adapters/index.js";
 import { readFileSync } from "node:fs";
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
@@ -38,6 +39,36 @@ it("stores immutable records and returns the same refs on duplicate upload", asy
   ]);
   expect(stored.rows[0].key_hash).not.toBe(p.key);
   await expect(authenticate(pool, "wrong")).rejects.toThrow();
+});
+it("accepts raw-only records and preserves their original file coordinates", async () => {
+  const p = await createProject(pool, "origin"),
+    rawRecord = {
+      offset: 0,
+      raw_base64: raw.toString("base64"),
+      origin: { path: "sessions/catscompany/2026-11-11/session.jsonl", offset: 9182 },
+    };
+  const ack = await ingestBatch(pool, p.project_id, {
+    source_id: "origin-source",
+    stream_id: "origin-stream",
+    harness: "xiaoba",
+    records: [rawRecord],
+  });
+  const stored = await readRaw(pool, p.project_id, ack.records[0].raw_ref);
+  expect(stored.bytes.equals(raw)).toBe(true);
+  expect(stored.origin).toEqual(rawRecord.origin);
+  await expect(ingestBatch(pool, p.project_id, {
+    source_id: "origin-source",
+    stream_id: "origin-stream",
+    harness: "xiaoba",
+    records: [{ ...rawRecord, origin: { ...rawRecord.origin, offset: 9183 } }],
+  })).rejects.toThrow(/origin conflict/);
+});
+it("rejects unsafe source paths", async () => {
+  const p = await createProject(pool, "unsafe-origin"), b = batch("unsafe-origin");
+  await expect(ingestBatch(pool, p.project_id, {
+    ...b,
+    records: [{ ...b.records[0], origin: { path: "../outside.jsonl", offset: 0 } }],
+  })).rejects.toThrow(/invalid source origin/);
 });
 it("issues an additional project key without invalidating the original", async () => {
   const p = await createProject(pool, "multi-key");

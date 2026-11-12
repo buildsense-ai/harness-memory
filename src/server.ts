@@ -12,6 +12,7 @@ const app = await buildApp({
   model: configuredModel(),
   budget: Number(process.env.MODEL_INPUT_BUDGET ?? 65536),
   memoryBudget: Number(process.env.MEMORY_INPUT_BUDGET ?? 4194304),
+  memoryRunConcurrency: Number(process.env.MEMORY_RUN_CONCURRENCY ?? 2),
 });
 await app.listen({
   host: process.env.HOST ?? "127.0.0.1",
