@@ -47,7 +47,7 @@ function renderSidebar() {
   $('more-sessions').hidden = !state.sessionNext;
   $('more-runs').hidden = !state.batchNext;
 }
-function renderMarkdown(target, markdown) { target.innerHTML = DOMPurify.sanitize(marked.parse(markdown), { USE_PROFILES: { html: false } }); }
+function renderMarkdown(target, markdown) { target.innerHTML = DOMPurify.sanitize(marked.parse(markdown), { USE_PROFILES: { html: true } }); }
 function eventText(event) {
   const text = event.text || JSON.stringify(event.content, null, 2);
   return text.length > 30000 ? text.slice(0, 30000) + '\n… clipped in viewer; use the exact source reference to inspect raw bytes.' : text;
