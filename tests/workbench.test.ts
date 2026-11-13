@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import { readFileSync } from "node:fs";
 import { buildApp } from "../src/app.js";
-import { createProject } from "../src/db/projects.js";
+import { createProject, createProjectKey, authenticateIdentity } from "../src/db/projects.js";
 import { migrate } from "../src/db/migrate.js";
 import { ingestBatch } from "../src/ingest.js";
 import { projectRecord } from "../src/adapters/index.js";
@@ -146,4 +146,48 @@ it("records server receipt time for new immutable raw records", async () => {
   const found = streamResponse.json().items.find((item: any) => item.stream_id === stream.stream_id);
   expect(found.first_received_at).toBeTruthy();
   expect(found.last_received_at).toBeTruthy();
+});
+
+it("attributes new API uploads to the authenticating Key and offers project-scoped filters", async () => {
+  const raw = readFileSync("tests/fixtures/xiaoba.jsonl");
+  const uploaderKey = await createProjectKey(pool, project.project_id);
+  const identity = await authenticateIdentity(pool, uploaderKey.key);
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/ingest/batches",
+    headers: { authorization: "Bearer " + uploaderKey.key },
+    payload: {
+      source_id: "key-attribution-source",
+      stream_id: "key-attribution-stream",
+      harness: "xiaoba",
+      records: [{ offset: 0, raw_base64: raw.toString("base64") }],
+    },
+  });
+  expect(response.statusCode).toBe(200);
+  const record = (await pool.query("select upload_key_id from raw_records where id=$1", [response.json().records[0].raw_ref])).rows[0];
+  expect(record.upload_key_id).toBe(identity.upload_key_id);
+  const filters = await get("/v1/workbench/filters");
+  expect(filters.json().upload_keys).toEqual(expect.arrayContaining([
+    expect.objectContaining({ upload_key_id: identity.upload_key_id, label: `上传 Key · ${identity.upload_key_id.slice(0, 16)}` }),
+    expect.objectContaining({ upload_key_id: null, label: "旧记录（未记录 Key）" }),
+  ]));
+  expect((await get(`/v1/workbench/sessions?upload_key_id=${identity.upload_key_id}`)).json().items)
+    .toEqual(expect.arrayContaining([expect.objectContaining({ source_id: "key-attribution-source" })]));
+  expect((await get("/v1/workbench/sessions?upload_key_id=__unattributed__")).json().items)
+    .toEqual(expect.arrayContaining([expect.objectContaining({ source_id: stream.source_id })]));
+});
+
+it("filters batches, sessions and memory search by the inclusive processing-date range", async () => {
+  const future = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  expect((await get(`/v1/workbench/runs?date_from=${future}`)).json().items).toEqual([]);
+  expect((await get(`/v1/workbench/sessions?date_from=${future}`)).json().items).toEqual([]);
+  const search = await app.inject({
+    method: "POST",
+    url: "/v1/memories/search",
+    headers: { authorization: "Bearer " + project.key },
+    payload: { keywords: ["来源"], date_from: future },
+  });
+  expect(search.statusCode).toBe(200);
+  expect(search.json().items).toEqual([]);
+  expect((await get("/v1/workbench/runs?date_from=2026-11-13&date_to=2026-11-12")).statusCode).toBe(400);
 });

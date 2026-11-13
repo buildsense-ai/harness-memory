@@ -20,6 +20,7 @@ Session identity comes from source_id + recorded session_id; if absent, source_i
 4. Pair tool call/results by ID and execution, including across pages; unmatched records remain visible. Collapse tool bodies, never discard them. Distinguish selected Episode from execution/query boundaries.
 5. Scope every read by project key. Keep key in page memory only. Disconnection aborts requests, clears graph and reader; late responses cannot restore previous-project content.
 6. Show queued/running/partial/failed state, counts and retryable read errors without pretending unpublished memories exist. Load more explicitly; loaded graph is not the entire project.
+7. Offer optional upload-Key and processing-date filters. Store the authenticated Key identity on each newly accepted raw record; never expose the secret. Existing records without attribution remain available under an explicit "unrecorded Key" choice. Apply the date range to extraction-run creation time and use the same filters for sessions, batches, and Markdown search results. These filters narrow the view; project-Key authorization remains the access boundary.
 
 ## Delivery and verification
 
