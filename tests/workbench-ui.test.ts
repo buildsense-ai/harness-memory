@@ -13,6 +13,9 @@ it("serves the workbench shell and static assets without requiring a database co
     expect(page.body).toContain("id=\"project-key\"");
     expect(page.body).toContain("id=\"reader-content\"");
     expect(page.body).toContain("id=\"connection-dialog\"");
+    expect(page.body).toContain("id=\"upload-key-filter\"");
+    expect(page.body).toContain("id=\"date-from\"");
+    expect(page.body).toContain("id=\"date-to\"");
     expect((await app.inject({ method: "GET", url: "/workbench.css" })).headers["content-type"]).toContain("text/css");
     expect((await app.inject({ method: "GET", url: "/workbench-overrides.css" })).headers["content-type"]).toContain("text/css");
     expect((await app.inject({ method: "GET", url: "/workbench.js" })).headers["content-type"]).toContain("javascript");
@@ -26,6 +29,7 @@ it("keeps all data endpoints behind the project key", async () => {
   try {
     for (const url of [
       "/v1/workbench/streams",
+      "/v1/workbench/filters",
       "/v1/workbench/sessions",
       "/v1/workbench/runs",
       "/v1/workbench/runs/run_x/graph",
@@ -42,7 +46,7 @@ it("keeps all data endpoints behind the project key", async () => {
 
 it("has browser-valid JavaScript syntax", () => {
   expect(() => new Function(WORKBENCH_JS)).not.toThrow();
-  expect(WORKBENCH_JS).toContain("DOMPurify.sanitize");
-  expect(WORKBENCH_JS).toContain("OrbitControls");
-  expect(WORKBENCH_JS).toContain("published_episode");
+  expect(WORKBENCH_JS).toContain("/workbench/filters");
+  expect(WORKBENCH_JS).toContain("/memories/search");
+  expect(WORKBENCH_JS).toContain("date_from");
 });

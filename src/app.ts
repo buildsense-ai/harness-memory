@@ -3,7 +3,7 @@ import { MemoryRunner } from "./extraction/memory-runner.js";
 import Fastify from "fastify";
 import type { Pool } from "pg";
 import { assert } from "./contracts.js";
-import { authenticate } from "./db/projects.js";
+import { authenticateIdentity } from "./db/projects.js";
 import { ingestBatch } from "./ingest.js";
 import { readReference, readRaw } from "./read.js";
 import { ExtractionRunner } from "./extraction/runner.js";
@@ -16,6 +16,7 @@ import {
   getWorkbenchGraph,
   getWorkbenchRunEvents,
   getMemoryDocument,
+  listWorkbenchFilters,
 } from "./workbench.js";
 import { WORKBENCH_HTML, WORKBENCH_CSS, WORKBENCH_OVERRIDES_CSS, WORKBENCH_JS } from "./workbench-ui.js";
 export async function buildApp({
@@ -54,6 +55,7 @@ export async function buildApp({
   await app.register(
     async (api) => {
       api.decorateRequest("projectId", "");
+      api.decorateRequest("uploadKeyId", "");
       api.addHook("onRequest", async (request) => {
         const a = request.headers.authorization;
         assert(
@@ -61,10 +63,12 @@ export async function buildApp({
           "project key required",
           401,
         );
-        (request as any).projectId = await authenticate(pool, a.slice(7));
+        const identity = await authenticateIdentity(pool, a.slice(7));
+        (request as any).projectId = identity.project_id;
+        (request as any).uploadKeyId = identity.upload_key_id;
       });
       api.post("/ingest/batches", async (r) =>
-        ingestBatch(pool, (r as any).projectId, r.body as any),
+        ingestBatch(pool, (r as any).projectId, r.body as any, (r as any).uploadKeyId),
       );
       api.post("/ingest/complete", async (r) => {
         const request = r.body as any;
@@ -73,6 +77,7 @@ export async function buildApp({
       });
       api.post("/memories/search", async (r) => searchMemories(pool, (r as any).projectId, r.body as any));
       api.get("/workbench/streams", async (r) => listWorkbenchStreams(pool, (r as any).projectId, r.query as any));
+      api.get("/workbench/filters", async (r) => listWorkbenchFilters(pool, (r as any).projectId));
       api.get("/workbench/sessions", async (r) => listWorkbenchSessions(pool, (r as any).projectId, r.query as any));
       api.get("/workbench/runs", async (r) => listWorkbenchRuns(pool, (r as any).projectId, r.query as any));
       api.get("/workbench/runs/:id/graph", async (r) => getWorkbenchGraph(pool, (r as any).projectId, (r.params as any).id, r.query as any));

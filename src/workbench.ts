@@ -17,7 +17,34 @@ const runSessions = `select distinct ${sessionIdentity("sr")} session_key,sr.sou
   join events se on se.project_id=x.project_id and se.id=refs.event_ref
   join raw_records sr on sr.project_id=se.project_id and sr.id=se.raw_id`;
 
-export async function listWorkbenchSessions(pool: Pool, project: string, query: { limit?: string | number; offset?: string | number }) {
+function validateFilters(query: { upload_key_id?: string; date_from?: string; date_to?: string }) {
+  assert(query.upload_key_id === undefined || (typeof query.upload_key_id === "string" && query.upload_key_id.length <= 256), "invalid upload_key_id");
+  const validDate = (value: string | undefined) => {
+    if (value === undefined) return true;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = Date.parse(`${value}T00:00:00Z`);
+    return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value;
+  };
+  assert(validDate(query.date_from) && validDate(query.date_to), "invalid processing date");
+  assert(!query.date_from || !query.date_to || query.date_from <= query.date_to, "date_from must be on or before date_to");
+}
+
+export async function listWorkbenchFilters(pool: Pool, project: string) {
+  const result = await pool.query(`select r.upload_key_id,
+      case when r.upload_key_id is null then '旧记录（未记录 Key）'
+           when r.upload_key_id=$1 then '主项目 Key'
+           else '上传 Key · '||left(r.upload_key_id,16) end label,
+      array_agg(distinct s.harness order by s.harness) harnesses,
+      array_agg(distinct r.source_id order by r.source_id) source_ids,
+      count(*)::int record_count,min(r.received_at) first_received_at,max(r.received_at) last_received_at
+    from raw_records r join streams s using(project_id,source_id,stream_id)
+    where r.project_id=$1 group by r.upload_key_id
+    order by min(r.received_at) desc nulls last,r.upload_key_id`, [project]);
+  return { upload_keys: result.rows };
+}
+
+export async function listWorkbenchSessions(pool: Pool, project: string, query: { limit?: string | number; offset?: string | number; upload_key_id?: string; date_from?: string; date_to?: string }) {
+  validateFilters(query);
   const { limit, offset } = page(query);
   const rows = await pool.query(`with sessions as (
     select ${sessionIdentity("r")} session_key,r.source_id,
@@ -26,9 +53,18 @@ export async function listWorkbenchSessions(pool: Pool, project: string, query: 
       array_agg(distinct s.harness) harnesses,count(distinct r.id)::int raw_record_count,
       min(r.received_at) first_received_at,max(r.received_at) last_received_at
     from raw_records r join streams s using(project_id,source_id,stream_id)
-    where r.project_id=$1 group by 1,2,3,4
-  ) select *,count(*) over()::int total from sessions
-    order by last_received_at desc nulls last,session_key offset $2 limit $3`, [project, offset, limit + 1]);
+    where r.project_id=$1 and ($4::text is null or coalesce(r.upload_key_id,'__unattributed__')=$4) group by 1,2,3,4
+  ) select filtered.*,count(*) over()::int total from sessions filtered
+    where (($5::date is null and $6::date is null) or exists(
+      select 1 from extraction_runs x where x.project_id=$1
+        and ($5::date is null or x.created_at >= $5::date)
+        and ($6::date is null or x.created_at < ($6::date + interval '1 day'))
+        and exists(select 1 from jsonb_array_elements_text(x.input_refs) refs(event_ref)
+          join events e on e.project_id=x.project_id and e.id=refs.event_ref
+          join raw_records source_record on source_record.project_id=e.project_id and source_record.id=e.raw_id
+          where ${sessionIdentity("source_record")} = filtered.session_key
+            and ($4::text is null or coalesce(source_record.upload_key_id,'__unattributed__')=$4))))
+    order by last_received_at desc nulls last,session_key offset $2 limit $3`, [project, offset, limit + 1, query.upload_key_id ?? null, query.date_from ?? null, query.date_to ?? null]);
   return { items: rows.rows.slice(0, limit).map(({ total, ...row }) => row),
     next_offset: rows.rows.length > limit ? offset + limit : null };
 }
@@ -78,8 +114,9 @@ export async function listWorkbenchStreams(
 export async function listWorkbenchRuns(
   pool: Pool,
   project: string,
-  query: { source_id?: string; stream_id?: string; session_key?: string; limit?: string | number; offset?: string | number },
+  query: { source_id?: string; stream_id?: string; session_key?: string; upload_key_id?: string; date_from?: string; date_to?: string; limit?: string | number; offset?: string | number },
 ) {
+  validateFilters(query);
   const { limit, offset } = page(query);
   assert(query.source_id === undefined || (typeof query.source_id === "string" && query.source_id.length <= 256), "invalid source_id");
   assert(query.stream_id === undefined || (typeof query.stream_id === "string" && query.stream_id.length <= 256), "invalid stream_id");
@@ -101,21 +138,33 @@ export async function listWorkbenchRuns(
         order by sr.stream_id) stream_ids
      from extraction_runs x where x.project_id=$1
        and ($6::text is null or exists(select 1 from (${runSessions}) sm where sm.session_key=$6))
+       and ($7::text is null or exists(select 1 from jsonb_array_elements_text(x.input_refs) refs(event_ref)
+         join events se on se.project_id=x.project_id and se.id=refs.event_ref
+         join raw_records sr on sr.project_id=se.project_id and sr.id=se.raw_id
+         where coalesce(sr.upload_key_id,'__unattributed__')=$7))
+       and ($8::date is null or x.created_at >= $8::date)
+       and ($9::date is null or x.created_at < ($9::date + interval '1 day'))
        and ($2::text is null or exists(select 1 from jsonb_array_elements_text(x.input_refs) refs(event_ref)
          join events se on se.project_id=x.project_id and se.id=refs.event_ref
          join raw_records sr on sr.project_id=se.project_id and sr.id=se.raw_id
          where sr.source_id=$2 and ($3::text is null or sr.stream_id=$3)))
      order by x.created_at desc,x.id offset $4 limit $5`,
-    [project, query.source_id ?? null, query.stream_id ?? null, offset, limit + 1, query.session_key ?? null],
+    [project, query.source_id ?? null, query.stream_id ?? null, offset, limit + 1, query.session_key ?? null, query.upload_key_id ?? null, query.date_from ?? null, query.date_to ?? null],
   );
   const count = await pool.query(
     `select count(*)::int n from extraction_runs x where x.project_id=$1
       and ($4::text is null or exists(select 1 from (${runSessions}) sm where sm.session_key=$4))
+      and ($5::text is null or exists(select 1 from jsonb_array_elements_text(x.input_refs) refs(event_ref)
+        join events se on se.project_id=x.project_id and se.id=refs.event_ref
+        join raw_records sr on sr.project_id=se.project_id and sr.id=se.raw_id
+        where coalesce(sr.upload_key_id,'__unattributed__')=$5))
+      and ($6::date is null or x.created_at >= $6::date)
+      and ($7::date is null or x.created_at < ($7::date + interval '1 day'))
       and ($2::text is null or exists(select 1 from jsonb_array_elements_text(x.input_refs) refs(event_ref)
         join events se on se.project_id=x.project_id and se.id=refs.event_ref
         join raw_records sr on sr.project_id=se.project_id and sr.id=se.raw_id
         where sr.source_id=$2 and ($3::text is null or sr.stream_id=$3)))`,
-    [project, query.source_id ?? null, query.stream_id ?? null, query.session_key ?? null],
+    [project, query.source_id ?? null, query.stream_id ?? null, query.session_key ?? null, query.upload_key_id ?? null, query.date_from ?? null, query.date_to ?? null],
   );
   return {
     items: result.rows.slice(0, limit).map((row) => ({

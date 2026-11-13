@@ -12,6 +12,7 @@ export async function ingestBatch(
   pool: Pool,
   projectId: string,
   b: UploadBatch,
+  uploadKeyId?: string,
 ): Promise<IngestAck> {
   assert(
     b &&
@@ -107,7 +108,7 @@ export async function ingestBatch(
         assert(r.offset === next, "offset conflict", 409);
         id = ref("raw");
         await c.query(
-          "insert into raw_records(id,project_id,source_id,stream_id,offset_bytes,raw,hash,metadata,received_at) values($1,$2,$3,$4,$5,$6,$7,$8,now())",
+          "insert into raw_records(id,project_id,source_id,stream_id,offset_bytes,raw,hash,metadata,received_at,upload_key_id) values($1,$2,$3,$4,$5,$6,$7,$8,now(),$9)",
           [
             id,
             projectId,
@@ -131,6 +132,7 @@ export async function ingestBatch(
               run_id: p.run_id,
               ...(r.origin ? { origin: r.origin } : {}),
             }),
+            uploadKeyId ?? null,
           ],
         );
         for (const e of p.events) {
