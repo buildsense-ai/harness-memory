@@ -1,6 +1,7 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { createGraph } from './graph.js';
+import { messageFormat } from './message-format.js';
 
 marked.setOptions({ gfm: true, breaks: false });
 const $ = id => document.getElementById(id);
@@ -56,6 +57,21 @@ function conversationMessage(event) {
   const name = speaker?.[1].trim().replace(/[（(](?:人|用户|机器人|智能体|助手|bot|AI)[）)]$/iu, '').trim();
   return { name: name || (event.kind === 'query' ? '用户' : 'Bot'), text: speaker ? text.slice(speaker[0].length) : text };
 }
+function renderMessage(target, text) {
+  const format = messageFormat(text);
+  if (format.kind === 'json') {
+    const pre = document.createElement('pre'); pre.textContent = format.text; target.append(pre);
+  } else {
+    renderMarkdown(target, format.text);
+    if (format.kind === 'memory') {
+      const details = document.createElement('details'); details.className = 'message-envelope';
+      const summary = document.createElement('summary'); summary.textContent = '查看原始注入数据';
+      const pre = document.createElement('pre'); pre.textContent = format.raw;
+      details.append(summary, pre); target.append(details);
+    }
+  }
+  return format.kind;
+}
 function renderSource(container, events) {
   const groups = new Map();
   for (const event of events) {
@@ -101,7 +117,8 @@ function renderSource(container, events) {
         const message = conversationMessage(event);
         const role = document.createElement('div'); role.className = 'event-heading'; role.textContent = message.name;
         const body = document.createElement('div'); body.className = 'message-body';
-        if (event.kind === 'query') body.textContent = message.text; else renderMarkdown(body, message.text);
+        if (event.kind === 'query') body.textContent = message.text;
+        else if (renderMessage(body, message.text) === 'memory') role.textContent = '记忆注入';
         const meta = document.createElement('span'); meta.className = 'event-ref';
         meta.textContent = [event.timestamp, event.ref].filter(Boolean).join(' · ');
         meta.title = meta.textContent;
