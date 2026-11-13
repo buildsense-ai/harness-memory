@@ -185,9 +185,9 @@ async function loadBatches(append = false) {
     for (const task of graphs[i].tasks) {
       const id = `${taskRuns[i].run_id}:${task.thread_id}`;
       const session = task.sessions.find(s => !state.activeSession || s.session_key === state.activeSession.session_key) || taskRuns[i].sessions[0];
-      const context = { id: `context:${id}`, runId: taskRuns[i].run_id, threadId: task.thread_id, title: task.title, task, episode: task.episode, memoryId: task.episode?.memory_id, sessionKey: session?.session_key, sessionLabel: session?.session_id || session?.stream_id, runLabel: labelRun(taskRuns[i]) };
+      const context = { id: `context:${id}`, kind: 'context', runId: taskRuns[i].run_id, threadId: task.thread_id, title: task.title, task, episode: task.episode, memoryId: task.episode?.memory_id, sessionKey: session?.session_key, sessionLabel: session?.session_id || session?.stream_id, runLabel: labelRun(taskRuns[i]) };
       state.contexts.push(context);
-      if (context.memoryId) state.wikis.push({ id: context.memoryId, memoryId: context.memoryId, contextId: context.id, runId: context.runId, threadId: context.threadId, title: task.title, context, sessionLabel: context.sessionLabel, runLabel: context.runLabel });
+      if (context.memoryId) state.wikis.push({ id: context.memoryId, kind: 'wiki', memoryId: context.memoryId, contextId: context.id, runId: context.runId, threadId: context.threadId, title: task.title, context, sessionLabel: context.sessionLabel, runLabel: context.runLabel });
     }
   }
 }
