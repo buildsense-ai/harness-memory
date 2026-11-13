@@ -1,5 +1,15 @@
 # Three-layer memory workbench
 
+## Revision approved 2026-11-13
+
+The visible graph now has two planes: Wiki and conversation batch. Wiki nodes map directly to their source processing batch; task/Episode membership stays in the data and drives the reader without a separate context node.
+
+The reader offers Wiki and conversation source tabs. The source tab shows the full batch in order, with the selected Wiki's persisted Episode members at normal contrast and other input visibly muted. With no Wiki selected, it shows the entire batch normally. Query and message bodies appear as conversation blocks; only a leading speaker annotation is removed for display. Original stored text is unchanged. Timestamps and immutable refs appear at the block's bottom corner on hover or keyboard focus. Continuous tool records collapse into a group, with each call/result still inspectable inside it. Batch banners and quiet conversation boundaries replace visible event/execution IDs.
+
+Source pagination appends to the existing batch, preserves scroll position and open tool sections, and allows continuing to a later loaded batch of the same session. Scrolling updates the selected batch on the graph/sidebar. A focused Wiki is retained independently of that batch selection so returning to the Wiki cannot select a sibling document. Later batches remain unselected for that Wiki. Existing project isolation, filters, extraction prompts and raw-reference semantics are unchanged.
+
+The three-layer description below records the original design; this revision supersedes its visible layers and reader tabs.
+
 ## Approved experience
 
 Adapt the approved minimal 3D prototype to the Monday memory service. Keep a quiet gray/white interface, soft colored point nodes, three horizontal planes and an orbitable perspective camera. No synthetic density data, folder semantics or semantic edges.

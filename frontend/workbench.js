@@ -6,7 +6,6 @@ marked.setOptions({ gfm: true, breaks: false });
 const $ = id => document.getElementById(id);
 const state = { key: '', sessions: [], batches: [], contexts: [], wikis: [], selected: null, loading: false, error: '', sessionOffset: 0, batchOffset: 0, searchHits: null, abort: null, generation: 0, uploadKeyId: '', dateFrom: '', dateTo: '', uploadKeys: [] };
 const graph = createGraph(selectNode);
-const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const labelRun = run => `${new Date(run.created_at).toLocaleString()} · ${run.status} · ${run.task_count ?? 0} tasks · ${run.published_memory_count ?? 0} Wiki`;
 function toast(text) { $('toast').textContent = text; $('toast').classList.add('visible'); setTimeout(() => $('toast').classList.remove('visible'), 2400); }
 async function api(path, options = {}, signal) {
@@ -25,7 +24,7 @@ function resetData() {
 function renderGraph() {
   graph.update({ sessions: state.sessions, batches: state.batches, contexts: state.contexts, wikis: state.wikis }, state.selected, state.searchHits);
   $('map-status').textContent = state.loading ? '加载中…' : state.error ? '读取失败' : `${state.batches.length} / ${state.totalBatches ?? state.batches.length} 批次已载入`;
-  $('sample-count').textContent = `${state.wikis.length} 篇 Wiki · ${state.contexts.length} 个上下文`;
+  $('sample-count').textContent = `${state.wikis.length} 篇 Wiki · ${state.batches.length} 个批次`;
   $('selection-path').textContent = state.selected ? `${state.selected.sessionLabel || state.selected.sessions?.[0]?.session_id || state.selected.sessions?.[0]?.stream_id || '来源'} / ${state.selected.runLabel || state.selected.title}` : '';
 }
 function renderSidebar() {
@@ -49,99 +48,161 @@ function renderSidebar() {
 }
 function renderMarkdown(target, markdown) { target.innerHTML = DOMPurify.sanitize(marked.parse(markdown), { USE_PROFILES: { html: true } }); }
 function eventText(event) {
-  const text = event.text || JSON.stringify(event.content, null, 2);
-  return text.length > 30000 ? text.slice(0, 30000) + '\n… clipped in viewer; use the exact source reference to inspect raw bytes.' : text;
+  return event.text ?? JSON.stringify(event.content, null, 2) ?? '';
 }
-function renderSource(container, events, selectedOnly = false) {
-  container.replaceChildren();
+function renderSource(container, events) {
   const groups = new Map();
-  for (const event of events) { const key = event.session_key + '\0' + (event.source_group || event.conversation_run_id || event.ref); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(event); }
+  for (const event of events) {
+    const key = event.session_key + '\0' + (event.source_group || event.conversation_run_id || event.ref);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(event);
+  }
   for (const group of groups.values()) {
-    const queries = group.filter(e => e.kind === 'query');
-    const runIds = [...new Set(group.map(e => e.conversation_run_id).filter(Boolean))];
-    group.forEach((event, index) => {
-      if (event.kind === 'tool_result' && event.tool_call_id) {
-        const prior = group.find(e => e.kind === 'tool_call' && e.tool_call_id === event.tool_call_id);
-        if (prior) return;
-      }
-      const article = document.createElement(event.kind === 'tool_call' ? 'details' : 'article');
-      article.className = event.kind === 'tool_call' ? 'tool-pair' : 'event' + (event.kind === 'message' ? ' msg' : '') + (event.selected ? '' : ' unselected');
-      if (event.kind === 'tool_call') {
+    const section = document.createElement('section'); section.className = 'conversation-episode';
+    const included = group.some(event => event.selected !== false);
+    const divider = document.createElement('div'); divider.className = 'episode-divider';
+    divider.textContent = included ? '对话段' : '对话段 · 未选'; section.append(divider);
+    let toolStack = null;
+    for (const event of group) {
+      if (event.kind === 'tool_result' && group.some(call => call.kind === 'tool_call' && call.tool_call_id && call.tool_call_id === event.tool_call_id)) continue;
+      const isTool = event.kind === 'tool_call' || event.kind === 'tool_result';
+      const article = document.createElement(isTool ? 'details' : 'article');
+      article.className = (isTool ? 'tool-pair' : `event ${event.kind === 'query' ? 'query' : 'msg'}`) + (event.selected === false ? ' unselected' : '');
+      article.dataset.ref = event.ref; article.tabIndex = 0;
+      if (isTool) {
+        const paired = event.kind === 'tool_call' ? group.find(result => result.kind === 'tool_result' && result.tool_call_id === event.tool_call_id) : null;
         const summary = document.createElement('summary');
-        const paired = group.find(e => e.kind === 'tool_result' && e.tool_call_id === event.tool_call_id);
-        summary.textContent = `${event.selected ? '已选' : '未选'} · ${event.content?.name || 'tool'}${paired ? ' · call/result' : event.tool_pair_ref ? ' · result on another page' : ' · result missing'}`;
+        summary.textContent = event.content?.name || '工具记录';
+        summary.title = `${event.ref}${event.selected === false ? ' · 未选' : ''}`;
         const body = document.createElement('div'); body.className = 'tool-body';
-        const call = document.createElement('pre'); call.textContent = eventText(event);
-        body.append(call);
-        if (paired) { const result = document.createElement('pre'); result.textContent = eventText(paired); body.append(result); }
-        else if (event.tool_pair_ref) {
-          const loadPair = document.createElement('button'); loadPair.textContent = '加载配对结果';
-          loadPair.onclick = async () => {
+        const addTool = record => {
+          const pre = document.createElement('pre'); pre.textContent = eventText(record);
+          if (record.selected === false) pre.className = 'unselected'; body.append(pre);
+        };
+        addTool(event); if (paired) addTool(paired);
+        if (!paired && event.tool_pair_ref) {
+          const button = document.createElement('button'); button.textContent = '加载配对记录';
+          button.onclick = async () => {
             try {
               const response = await api('/read', { method: 'POST', body: JSON.stringify({ ref: event.tool_pair_ref }) });
-              const result = document.createElement('pre'); result.textContent = eventText({ ...response.event, selected: event.tool_pair_selected });
-              loadPair.replaceWith(result);
-            } catch (error) { toast('工具结果读取失败：' + error.message); }
+              addTool({ ...response.event, selected: event.tool_pair_selected }); button.remove();
+            } catch (error) { toast('工具记录读取失败：' + error.message); }
           };
-          body.append(loadPair);
+          body.append(button);
         }
         article.append(summary, body);
       } else {
-        const heading = document.createElement('div'); heading.className = 'event-heading';
-        heading.textContent = `${event.kind} · ${event.timestamp || ''} · ${event.ref}`;
-        const p = document.createElement('p'); p.textContent = eventText(event);
-        article.append(heading, p);
+        const role = document.createElement('div'); role.className = 'event-heading'; role.textContent = event.kind === 'query' ? '输入' : '回复';
+        const body = document.createElement('div'); body.className = 'message-body';
+        const text = eventText(event).replace(/^\[发言人\s*[:：][^\]]+\][ \t]*(?:\r?\n)?/u, '');
+        if (event.kind === 'query') body.textContent = text; else renderMarkdown(body, text);
+        const meta = document.createElement('span'); meta.className = 'event-ref';
+        meta.textContent = [event.timestamp, event.ref].filter(Boolean).join(' · ');
+        meta.title = meta.textContent;
+        article.append(role, body, meta);
       }
-      container.append(article);
-    });
-    const queriesText = queries.map(q => q.text).join('\n');
-    const heading = document.createElement('div'); heading.className = 'episode-divider';
-    heading.textContent = `${runIds.length ? '执行段 ' + runIds.join(', ') : '日志段'} · ${queries.length} query · ${group.filter(e => e.selected).length}/${group.length} selected`;
-    container.insertBefore(heading, container.lastChild);
-    void queriesText;
+      if (isTool) {
+        if (!toolStack) {
+          const stack = document.createElement('details'); stack.className = 'tool-stack'; stack.dataset.ref = 'tools:' + event.ref;
+          const summary = document.createElement('summary'); stack.append(summary);
+          const body = document.createElement('div'); stack.append(body); section.append(stack);
+          toolStack = { stack, summary, body, count: 0, selected: false };
+        }
+        toolStack.count++; toolStack.selected ||= event.selected !== false;
+        toolStack.summary.textContent = `${toolStack.count} 条工具记录`;
+        toolStack.stack.classList.toggle('unselected', !toolStack.selected);
+        toolStack.body.append(article);
+      } else { toolStack = null; section.append(article); }
+    }
+    container.append(section);
   }
 }
-function renderReader() {
-  const selection = state.selected;
-  document.querySelectorAll('[data-view]').forEach(el => el.classList.toggle('active', el.dataset.view === (selection?.kind === 'wiki' ? 'wiki' : selection?.kind === 'context' ? 'context' : 'batch')));
-  if (!selection) { $('reader-label').textContent = '未连接'; $('reader-content').textContent = state.error || '使用项目 Key 连接记忆服务'; $('reader-footnote').textContent = '未读取服务器内容'; $('follow-source').disabled = true; return; }
+function nextConversationBatch(selection) {
+  const last = selection.pages?.at(-1)?.batch;
+  if (!last || last.sessions?.length !== 1) return null;
+  const session = last.sessions[0].session_key;
+  return state.batches.filter(run => run.sessions?.some(item => item.session_key === session))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.run_id.localeCompare(b.run_id))
+    .find(run => run.created_at > last.created_at || (run.created_at === last.created_at && run.run_id > last.run_id)) || null;
+}
+function renderConversation(selection) {
+  const container = $('reader-content');
+  for (const page of selection.pages) {
+    const section = document.createElement('section'); section.className = 'batch-block'; section.dataset.runId = page.batch.run_id;
+    const banner = document.createElement('div'); banner.className = 'batch-banner';
+    banner.textContent = new Date(page.batch.created_at).toLocaleString();
+    if (selection.focusWiki) {
+      const label = document.createElement('span'); label.textContent = page.batch.run_id === selection.focusWiki.runId ? 'Wiki 来源批次' : '未选批次'; banner.append(label);
+    }
+    section.append(banner); renderSource(section, page.events);
+    if (page.error) { const error = document.createElement('p'); error.className = 'reader-error'; error.textContent = page.error; section.append(error); }
+    container.append(section);
+  }
+  const more = selection.pages.at(-1);
+  const button = document.createElement('button'); button.className = 'load-conversation';
+  button.textContent = selection.loadingMore ? '加载中…' : more.nextOffset != null ? '继续加载本批次' : nextConversationBatch(selection) ? '继续查看下一批次' : '已到本批次末尾';
+  button.disabled = selection.loadingMore || (more.nextOffset == null && !nextConversationBatch(selection));
+  button.onclick = () => loadMoreConversation(selection); container.append(button);
+}
+function renderReader(preservePosition = false) {
+  const selection = state.selected, container = $('reader-content');
+  const top = preservePosition ? container.scrollTop : 0;
+  const openTools = new Set(preservePosition ? [...container.querySelectorAll('details[open]')].map(el => el.dataset.ref) : []);
+  document.querySelectorAll('[data-view]').forEach(el => el.classList.toggle('active', Boolean(selection) && el.dataset.view === (selection?.kind === 'wiki' ? 'wiki' : 'context')));
+  container.classList.toggle('conversation-view', Boolean(selection && selection.kind !== 'wiki'));
+  container.replaceChildren(); $('reader-meta').replaceChildren();
+  if (!selection) {
+    $('reader-label').textContent = '未连接'; container.textContent = state.error || '使用项目 Key 连接记忆服务';
+    $('reader-footnote').textContent = '未读取服务器内容'; $('follow-source').disabled = true; return;
+  }
   $('reader-title').textContent = selection.title; $('reader-id').textContent = selection.id;
-  $('reader-content').replaceChildren(); $('reader-meta').replaceChildren(); $('follow-source').disabled = false;
+  $('follow-source').disabled = false;
   if (selection.kind === 'wiki') {
-    $('reader-label').textContent = 'Wiki'; $('reader-footnote').textContent = '保存的 Markdown · 引用 Episode 原文';
-    renderMarkdown($('reader-content'), selection.markdown || '加载记忆…');
-    $('reader-meta').textContent = `${selection.sessionLabel} · ${selection.runLabel}`;
-  } else if (selection.kind === 'context') {
-    $('reader-label').textContent = selection.selectionSource === 'published_episode' ? 'Episode 上下文' : '候选上下文';
-    $('reader-footnote').textContent = selection.selectionSource === 'published_episode' ? '已保存 Episode 成员高亮；同批次其余输入淡显' : '尚未发布；按生成候选规则预览';
-    $('reader-meta').textContent = `${selection.selectedCount} selected · ${selection.events?.length ?? 0} loaded`;
-    const marker = document.createElement('div'); marker.className = 'episode-divider'; marker.textContent = `Episode · ${selection.title} · ${selection.selectionSource === 'published_episode' ? '已发布' : '候选预览'}`; $('reader-content').append(marker);
-    renderSource($('reader-content'), selection.events || []);
+    $('reader-label').textContent = 'Wiki'; $('reader-footnote').textContent = '保存的 Markdown · 可回查会话原文';
+    $('follow-source').textContent = '查看原文 ↗';
+    renderMarkdown(container, selection.markdown || '加载记忆…');
   } else {
-    $('reader-label').textContent = `会话批次 · ${selection.status}`;
-    $('reader-footnote').textContent = '当前批次完整输入；滚动到底载入下一批次';
-    $('reader-meta').textContent = `${selection.input_event_count} events · ${selection.task_count} tasks · ${selection.published_memory_count} Wiki`;
-    if (selection.error) { const error = document.createElement('p'); error.className = 'reader-error'; error.textContent = `处理错误：${selection.error}`; $('reader-content').append(error); }
-    renderSource($('reader-content'), selection.events || [], false);
+    $('reader-label').textContent = '会话原文';
+    $('reader-footnote').textContent = selection.focusWiki ? '淡色为当前 Wiki 未选内容' : '完整批次 · 工具记录默认折叠';
+    $('follow-source').textContent = '返回 Wiki';
+    $('follow-source').disabled = !selection.focusWiki && !state.wikis.some(wiki => wiki.runId === selection.runId);
+    renderConversation(selection);
   }
+  for (const tool of container.querySelectorAll('details')) if (openTools.has(tool.dataset.ref)) tool.open = true;
+  container.scrollTop = top;
 }
-async function loadBatch(runId) {
-  const run = state.batches.find(b => b.run_id === runId); if (!run) return;
-  state.selected = { id: runId, runId, kind: 'batch', title: labelRun(run), status: run.status, ...run, events: [] };
-  renderGraph(); renderReader();
-  const generation = state.generation, controller = new AbortController(); state.abort?.abort(); state.abort = controller;
-  try {
-    const response = await api(`/workbench/runs/${encodeURIComponent(runId)}/events?limit=100`, {}, controller.signal);
-    if (generation !== state.generation || state.selected?.runId !== runId) return;
-    state.selected.events.push(...response.items); state.selected.nextOffset = response.next_offset; renderReader();
-  } catch (e) { if (e.name !== 'AbortError') toast('批次读取失败：' + e.message); }
+async function loadBatch(runId, focusWiki = null) {
+  const batch = state.batches.find(item => item.run_id === runId); if (!batch) return;
+  const page = { batch, events: [], nextOffset: 0 };
+  const selection = { id: runId, runId, kind: 'batch', title: focusWiki?.title || '会话原文', focusWiki, pages: [page], sessionLabel: batch.sessions?.[0]?.session_id || batch.sessions?.[0]?.stream_id, runLabel: new Date(batch.created_at).toLocaleString() };
+  state.selected = selection; renderGraph(); renderSidebar(); renderReader();
+  await loadMoreConversation(selection);
 }
 async function loadContext(node) {
-  state.selected = { ...node, title: node.title || node.task.title, selectionSource: 'candidate_preview', events: [], selectedCount: 0 };
-  renderGraph(); renderReader(); const generation = state.generation;
-  const response = await api(`/workbench/runs/${encodeURIComponent(node.runId)}/events?thread_id=${encodeURIComponent(node.threadId)}&context=true&limit=100`);
-  if (generation !== state.generation || state.selected?.id !== node.id) return;
-  Object.assign(state.selected, response, { events: response.items }); renderReader();
+  const wiki = state.wikis.find(item => item.memoryId === node.memoryId);
+  await loadBatch(node.runId, wiki || null);
+}
+async function loadMoreConversation(selection) {
+  if (selection !== state.selected || selection.loadingMore) return;
+  let page = selection.pages.at(-1);
+  if (page.nextOffset == null) {
+    const batch = nextConversationBatch(selection); if (!batch) return;
+    page = { batch, events: [], nextOffset: 0 }; selection.pages.push(page);
+  }
+  selection.loadingMore = true; page.error = null;
+  try {
+    const params = new URLSearchParams({ offset: String(page.nextOffset), limit: '100' });
+    if (selection.focusWiki?.runId === page.batch.run_id) { params.set('thread_id', selection.focusWiki.threadId); params.set('context', 'true'); }
+    const result = await api(`/workbench/runs/${encodeURIComponent(page.batch.run_id)}/events?${params}`);
+    if (selection !== state.selected) return;
+    page.events.push(...result.items.map(event => selection.focusWiki && selection.focusWiki.runId !== page.batch.run_id ? { ...event, selected: false } : event));
+    page.nextOffset = result.next_offset;
+  } catch (error) {
+    page.error = '原文加载失败：' + error.message; toast(page.error);
+  } finally {
+    selection.loadingMore = false;
+    if (selection === state.selected) renderReader(true);
+  }
 }
 async function loadWiki(node) {
   state.selected = { ...node, kind: 'wiki', title: node.title, markdown: null };
@@ -154,7 +215,10 @@ async function selectNode(node) {
   try {
     if (node.kind === 'wiki') await loadWiki(node);
     else if (node.kind === 'context') await loadContext(node);
-    else await loadBatch(node.runId);
+    else {
+      const focusWiki = state.selected?.kind === 'wiki' ? state.selected : state.selected?.focusWiki;
+      await loadBatch(node.runId, focusWiki?.runId === node.runId ? focusWiki : null);
+    }
   } catch (e) { toast('读取失败：' + e.message); }
 }
 async function loadSessions(append = false) {
@@ -266,29 +330,33 @@ $('search-form').onsubmit = async e => {
 };
 $('search').oninput = () => { if (!$('search').value) { state.searchHits = null; renderGraph(); $('search-results').replaceChildren(); } };
 document.querySelectorAll('[data-view]').forEach(button => button.onclick = () => {
-  if (!state.selected) return;
-  if (button.dataset.view === 'wiki') { const wiki = state.wikis.find(w => w.runId === state.selected.runId && w.memoryId); if (wiki) selectNode(wiki); }
-  if (button.dataset.view === 'context') { const context = state.contexts.find(c => c.runId === state.selected.runId); if (context) selectNode(context); }
-  if (button.dataset.view === 'batch') { const batch = state.batches.find(b => b.run_id === state.selected.runId); if (batch) selectNode({ ...batch, id: batch.run_id, runId: batch.run_id, kind: 'batch', title: labelRun(batch) }); }
+  const selection = state.selected; if (!selection) return;
+  if (button.dataset.view === 'wiki') {
+    const wiki = selection.focusWiki || (selection.kind === 'wiki' ? selection : state.wikis.find(item => item.runId === selection.runId));
+    if (wiki) selectNode(wiki);
+  } else if (selection.kind === 'wiki') {
+    loadBatch(selection.runId, selection);
+  }
 });
 $('follow-source').onclick = () => {
-  if (!state.selected) return;
-  if (state.selected.kind === 'wiki' && state.selected.context) selectNode({ ...state.selected.context, kind: 'context' });
-  else if (state.selected.kind === 'context') loadBatch(state.selected.runId);
-  else { const context = state.contexts.find(c => c.runId === state.selected.runId); if (context) selectNode(context); }
-};
-$('reader-content').onscroll = async e => {
-  const el = e.currentTarget, selected = state.selected;
-  if (el.scrollTop + el.clientHeight < el.scrollHeight - 120 || !selected || selected.loadingMore) return;
-  if ((selected.kind === 'batch' || selected.kind === 'context') && selected.nextOffset != null) {
-    selected.loadingMore = true;
-    try { const context = selected.kind === 'context' ? `&thread_id=${encodeURIComponent(selected.threadId)}&context=true` : ''; const result = await api(`/workbench/runs/${encodeURIComponent(selected.runId)}/events?offset=${selected.nextOffset}&limit=100${context}`); if (state.selected === selected) { selected.events.push(...result.items); selected.nextOffset = result.next_offset; renderReader(); } }
-    catch (err) { toast('后续原文加载失败：' + err.message); } finally { selected.loadingMore = false; }
-  } else if (selected.kind === 'batch' && selected.nextOffset == null) {
-    const sessionKey = selected.sessions?.length === 1 ? selected.sessions[0].session_key : null;
-    const runs = sessionKey ? state.batches.filter(run => run.run_id !== selected.run_id && run.sessions?.some(s => s.session_key === sessionKey)).sort((a, b) => a.created_at.localeCompare(b.created_at)) : [];
-    const next = runs.find(run => run.created_at > selected.created_at);
-    if (next) await loadBatch(next.run_id);
+  const selection = state.selected; if (!selection) return;
+  if (selection.kind === 'wiki') loadBatch(selection.runId, selection);
+  else {
+    const wiki = selection.focusWiki || state.wikis.find(item => item.runId === selection.runId);
+    if (wiki) selectNode(wiki);
   }
+};
+$('reader-content').onscroll = e => {
+  const el = e.currentTarget, selection = state.selected;
+  if (!selection || selection.kind === 'wiki') return;
+  const bounds = el.getBoundingClientRect();
+  const active = [...el.querySelectorAll('.batch-block')].find(section => section.getBoundingClientRect().bottom > bounds.top + 40);
+  if (active && active.dataset.runId !== selection.runId) {
+    selection.runId = active.dataset.runId; selection.id = selection.runId;
+    const batch = selection.pages.find(page => page.batch.run_id === selection.runId)?.batch;
+    if (batch) selection.runLabel = new Date(batch.created_at).toLocaleString();
+    renderGraph(); renderSidebar();
+  }
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) loadMoreConversation(selection);
 };
 renderGraph(); renderReader();
