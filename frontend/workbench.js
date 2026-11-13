@@ -50,6 +50,12 @@ function renderMarkdown(target, markdown) { target.innerHTML = DOMPurify.sanitiz
 function eventText(event) {
   return event.text ?? JSON.stringify(event.content, null, 2) ?? '';
 }
+function conversationMessage(event) {
+  const text = eventText(event);
+  const speaker = /^\[发言人\s*[:：]\s*([^\]\r\n]+)\][ \t]*(?:\r?\n)?/u.exec(text);
+  const name = speaker?.[1].trim().replace(/[（(](?:人|用户|机器人|智能体|助手|bot|AI)[）)]$/iu, '').trim();
+  return { name: name || (event.kind === 'query' ? '用户' : 'Bot'), text: speaker ? text.slice(speaker[0].length) : text };
+}
 function renderSource(container, events) {
   const groups = new Map();
   for (const event of events) {
@@ -92,10 +98,10 @@ function renderSource(container, events) {
         }
         article.append(summary, body);
       } else {
-        const role = document.createElement('div'); role.className = 'event-heading'; role.textContent = event.kind === 'query' ? '输入' : '回复';
+        const message = conversationMessage(event);
+        const role = document.createElement('div'); role.className = 'event-heading'; role.textContent = message.name;
         const body = document.createElement('div'); body.className = 'message-body';
-        const text = eventText(event).replace(/^\[发言人\s*[:：][^\]]+\][ \t]*(?:\r?\n)?/u, '');
-        if (event.kind === 'query') body.textContent = text; else renderMarkdown(body, text);
+        if (event.kind === 'query') body.textContent = message.text; else renderMarkdown(body, message.text);
         const meta = document.createElement('span'); meta.className = 'event-ref';
         meta.textContent = [event.timestamp, event.ref].filter(Boolean).join(' · ');
         meta.title = meta.textContent;
