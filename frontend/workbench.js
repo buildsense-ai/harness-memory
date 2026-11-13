@@ -19,7 +19,7 @@ function resetData() {
   state.sessions = []; state.batches = []; state.contexts = []; state.wikis = []; state.selected = null; state.searchHits = null;
   state.activeSession = null; state.sessionOffset = 0; state.batchOffset = 0; state.sessionNext = null; state.batchNext = null; state.totalBatches = 0;
   graph.update({ sessions: [], batches: [], contexts: [], wikis: [] }, null);
-  $('sessions').replaceChildren(); $('search-results').replaceChildren(); $('memory-content').replaceChildren(); $('source-content').replaceChildren();
+  $('sessions').replaceChildren(); $('search-results').replaceChildren(); $('reader-content').replaceChildren();
   $('reader-title').textContent = ''; $('reader-id').textContent = ''; $('reader-meta').textContent = '';
 }
 function renderGraph() {
