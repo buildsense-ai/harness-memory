@@ -10,9 +10,10 @@ dialog{border:1px solid #ddd;border-radius:6px;min-width:min(420px,calc(100vw - 
 /* Conversation reader */
 .reader-header #reader-id,.reader-meta{display:none}
 .reader-content .event{position:relative;padding:12px 14px 22px;margin:12px 0;border:1px solid #e6eaf0;border-radius:10px;background:#f4f7fb;outline-offset:2px}
-.reader-content .event.query{margin-right:6%;border-top-left-radius:3px}
-.reader-content .event.msg{margin-left:6%;background:#f7faf8;border-color:#e6ece8;border-top-right-radius:3px}
+.reader-content .event.query{width:fit-content;max-width:94%;min-width:min(140px,100%);margin-left:auto;border-top-right-radius:3px}
+.reader-content .event.msg{width:fit-content;max-width:94%;min-width:min(140px,100%);margin-right:auto;background:#f7faf8;border-color:#e6ece8;border-top-left-radius:3px}
 .reader-content .event-heading{font-size:10px;color:#84909c;margin-bottom:5px}
+.reader-content .query .event-heading{text-align:right}
 .reader-content .message-body{font-size:12px;line-height:1.85;color:#414950}
 .reader-content .query .message-body{white-space:pre-wrap}
 .reader-content .message-body> :first-child{margin-top:0}
