@@ -49,4 +49,6 @@ it("has browser-valid JavaScript syntax", () => {
   expect(WORKBENCH_JS).toContain("/workbench/filters");
   expect(WORKBENCH_JS).toContain("/memories/search");
   expect(WORKBENCH_JS).toContain("date_from");
+  expect(WORKBENCH_JS).not.toContain("memory-content");
+  expect(WORKBENCH_JS).not.toContain("source-content");
 });
