@@ -66,15 +66,15 @@ export function createGraph(onSelect) {
       const session = batches[0].sessions;
       labels.push({ position: first.clone().lerp(last, .5).add(new THREE.Vector3(0, 0, -30)), title: session.length === 1 ? session[0].session_id ?? session[0].stream_id ?? key : '多个会话', kind: 'session' });
     });
-    for (const y of [235, 0, -235]) {
+    for (const y of [235, -235]) {
       const corners = [[-445, y, -245], [445, y, -245], [445, y, 245], [-445, y, 245]].map(p => new THREE.Vector3(...p));
       for (let i = 0; i < 4; i++) segment(corners[i], corners[(i + 1) % 4], '#b9c0c8', .21);
-      labels.push({ position: corners[0], title: y === 235 ? 'Wiki' : y === 0 ? '选定上下文' : '会话批次', kind: 'layer' });
+      labels.push({ position: corners[0], title: y === 235 ? 'Wiki' : '会话批次', kind: 'layer' });
     }
     const activeRun = selected?.runId;
     const vertices = [], colors = [], sizes = [];
     const add = node => {
-      const active = node.id === selected?.id;
+      const active = node.id === selected?.id || node.id === selected?.focusWiki?.id;
       const related = node.runId === activeRun;
       const match = !hits || node.kind === 'batch' || hits.has(node.memoryId);
       const color = new THREE.Color(node.color);
@@ -85,36 +85,28 @@ export function createGraph(onSelect) {
     };
     data.batches.forEach(b => {
       const p = positions.get(b.run_id);
-      add({ id: b.run_id, runId: b.run_id, kind: 'batch', position: p, color: '#8b98aa', title: b.label + (b.sessions.length > 1 ? ' · 多会话' : '') });
+      add({ id: b.run_id, runId: b.run_id, kind: 'batch', position: p, color: '#8b98aa', title: `${new Date(b.created_at).toLocaleString()} · ${b.task_count ?? 0} 个目标` + (b.sessions.length > 1 ? ' · 多会话' : '') });
       segment(p.clone().add(new THREE.Vector3(-8, 0, 0)), p.clone().add(new THREE.Vector3(8, 0, 0)), '#8e98a7', .7);
     });
-    const contextsByRun = new Map();
-    for (const c of data.contexts) {
-      if (!contextsByRun.has(c.runId)) contextsByRun.set(c.runId, []);
-      contextsByRun.get(c.runId).push(c);
+    const wikisByRun = new Map();
+    for (const wiki of data.wikis) { if (!wikisByRun.has(wiki.runId)) wikisByRun.set(wiki.runId, []); wikisByRun.get(wiki.runId).push(wiki); }
+    for (const [runId, wikis] of wikisByRun) {
+      const batch = positions.get(runId); if (!batch) continue;
+      wikis.forEach((wiki, index) => {
+        const angle = index * 2.39996323, radius = wikis.length === 1 ? 0 : 32 + Math.sqrt(index) * 20;
+        const p = new THREE.Vector3(batch.x + Math.cos(angle) * radius, 235, batch.z + Math.sin(angle) * radius * .8);
+        const color = palette[index % palette.length];
+        add({ ...wiki, position: p, kind: 'wiki', color });
+        if ($('show-links').checked || runId === activeRun) segment(p, batch, color, runId === activeRun ? .5 : .12);
+      });
     }
-    data.contexts.forEach((c, index) => {
-      const batch = positions.get(c.runId); if (!batch) return;
-      const siblings = contextsByRun.get(c.runId), i = siblings.indexOf(c);
-      const angle = i * 2.39996323, r = siblings.length === 1 ? 0 : 25 + Math.sqrt(i) * 17;
-      const p = new THREE.Vector3(batch.x + Math.cos(angle) * r, 0, batch.z + Math.sin(angle) * r * .8);
-      const color = palette[index % palette.length];
-      add({ ...c, position: p, kind: 'context', color });
-      if ($('show-links').checked || c.runId === activeRun) segment(p, batch, color, c.runId === activeRun ? .38 : .09);
-      const wiki = data.wikis.find(w => w.contextId === c.id);
-      if (wiki) {
-        const top = p.clone().setY(235);
-        add({ ...wiki, position: top, kind: 'wiki', color });
-        if ($('show-links').checked || c.runId === activeRun) segment(top, p, color, c.runId === activeRun ? .46 : .1);
-      }
-    });
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1));
     points = new THREE.Points(geometry, material); points.frustumCulled = false; scene.add(points);
     $('node-list').replaceChildren(...nodes.map(n => {
-      const button = document.createElement('button'); button.textContent = `${n.kind === 'wiki' ? 'Wiki' : n.kind === 'context' ? '上下文' : '批次'} · ${n.title}`;
+      const button = document.createElement('button'); button.textContent = `${n.kind === 'wiki' ? 'Wiki' : '批次'} · ${n.title}`;
       button.classList.toggle('active', n.active); button.onclick = () => onSelect(n); return button;
     }));
     draw();
