@@ -11,6 +11,7 @@ export async function migrate(pool: Pool) {
     await c.query(await readFile("src/db/migrations/004_workbench.sql", "utf8"));
     await c.query(await readFile("src/db/migrations/005_project_keys.sql", "utf8"));
     await c.query(await readFile("src/db/migrations/006_upload_key_attribution.sql", "utf8"));
+    await c.query(await readFile("src/db/migrations/007_workbench_catalog.sql", "utf8"));
     await c.query("COMMIT");
   } catch (e) {
     await c.query("ROLLBACK");

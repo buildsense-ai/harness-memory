@@ -14,6 +14,8 @@ it("serves the workbench shell and static assets without requiring a database co
     expect(page.body).toContain("id=\"reader-content\"");
     expect(page.body).toContain("id=\"connection-dialog\"");
     expect(page.body).toContain("id=\"upload-key-filter\"");
+    expect(page.body).toContain("id=\"bot-filter\"");
+    expect(page.body).toContain("id=\"user-filter\"");
     expect(page.body).toContain("id=\"date-from\"");
     expect(page.body).toContain("id=\"date-to\"");
     expect((await app.inject({ method: "GET", url: "/workbench.css" })).headers["content-type"]).toContain("text/css");

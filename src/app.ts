@@ -77,7 +77,7 @@ export async function buildApp({
       });
       api.post("/memories/search", async (r) => searchMemories(pool, (r as any).projectId, r.body as any));
       api.get("/workbench/streams", async (r) => listWorkbenchStreams(pool, (r as any).projectId, r.query as any));
-      api.get("/workbench/filters", async (r) => listWorkbenchFilters(pool, (r as any).projectId));
+      api.get("/workbench/filters", async (r) => listWorkbenchFilters(pool, (r as any).projectId, r.query as any));
       api.get("/workbench/sessions", async (r) => listWorkbenchSessions(pool, (r as any).projectId, r.query as any));
       api.get("/workbench/runs", async (r) => listWorkbenchRuns(pool, (r as any).projectId, r.query as any));
       api.get("/workbench/runs/:id/graph", async (r) => getWorkbenchGraph(pool, (r as any).projectId, (r.params as any).id, r.query as any));

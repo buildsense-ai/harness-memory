@@ -64,7 +64,7 @@ export function createGraph(onSelect) {
       const first = positions.get(batches[0].run_id), last = positions.get(batches.at(-1).run_id);
       segment(first, last, '#9aa4b3', .35);
       const session = batches[0].sessions;
-      labels.push({ position: first.clone().lerp(last, .5).add(new THREE.Vector3(0, 0, -30)), title: session.length === 1 ? session[0].session_id ?? session[0].stream_id ?? key : '多个会话', kind: 'session' });
+      labels.push({ position: first.clone().lerp(last, .5).add(new THREE.Vector3(0, 0, -30)), title: session.length === 1 ? session[0].display_label || '会话' : '多个会话', kind: 'session' });
     });
     for (const y of [235, -235]) {
       const corners = [[-445, y, -245], [445, y, -245], [445, y, 245], [-445, y, 245]].map(p => new THREE.Vector3(...p));
