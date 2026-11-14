@@ -44,8 +44,20 @@ function renderSidebar() {
     if (session.session_name) { const name = document.createElement('span'); name.textContent = session.session_name; labels.append(name); }
     const people = document.createElement('span'); people.className = 'session-people';
     people.textContent = [session.bot_name, ...(session.participant_names || [])].filter(Boolean).join(' · ') || '会话'; labels.append(people); title.append(labels);
-    title.onclick = async () => { try { state.activeSession = session; state.batches = []; state.contexts = []; state.wikis = []; state.batchOffset = 0; state.selected = null; await loadBatches(); renderSidebar(); renderGraph(); const first = state.batches[0]; if (first) await loadBatch(first.run_id); } catch (e) { toast('会话载入失败：' + e.message); } };
-    const info = document.createElement('small'); info.textContent = `${state.batches.filter(b => b.sessions.some(s => s.session_key === session.session_key)).length}${state.batchNext ? '+' : ''} 批次`;
+    title.onclick = async () => {
+      const generation = ++state.generation;
+      try {
+        state.activeSession = session; state.batches = []; state.contexts = []; state.wikis = []; state.batchOffset = 0; state.selected = null;
+        renderGraph(); renderReader();
+        await loadBatches(); if (generation !== state.generation) return;
+        renderSidebar(); renderGraph(); renderReader();
+        const first = state.batches[0]; if (first) await loadBatch(first.run_id);
+      } catch (e) { if (generation === state.generation) toast('会话载入失败：' + e.message); }
+    };
+    const info = document.createElement('small');
+    if (!state.activeSession || state.activeSession.session_key === session.session_key) {
+      info.textContent = `${state.batches.filter(b => b.sessions.some(s => s.session_key === session.session_key)).length}${state.batchNext ? '+' : ''} 批次`;
+    }
     title.append(info); group.append(title);
     const list = document.createElement('div'); list.className = 'batch-list';
     for (const batch of state.batches.filter(b => b.sessions.some(s => s.session_key === session.session_key)).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.run_id.localeCompare(b.run_id))) {
