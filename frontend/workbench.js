@@ -54,7 +54,10 @@ function renderSidebar() {
         const first = state.batches[0]; if (first) await loadBatch(first.run_id);
       } catch (e) { if (generation === state.generation) toast('会话载入失败：' + e.message); }
     };
-    const info = document.createElement('small'); info.textContent = `${state.batches.filter(b => b.sessions.some(s => s.session_key === session.session_key)).length}${state.batchNext ? '+' : ''} 批次`;
+    const info = document.createElement('small');
+    if (!state.activeSession || state.activeSession.session_key === session.session_key) {
+      info.textContent = `${state.batches.filter(b => b.sessions.some(s => s.session_key === session.session_key)).length}${state.batchNext ? '+' : ''} 批次`;
+    }
     title.append(info); group.append(title);
     const list = document.createElement('div'); list.className = 'batch-list';
     for (const batch of state.batches.filter(b => b.sessions.some(s => s.session_key === session.session_key)).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.run_id.localeCompare(b.run_id))) {
