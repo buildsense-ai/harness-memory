@@ -9,10 +9,13 @@ export function formatMemoryDocument(row: { id: string; markdown: string; episod
   };
 }
 
-export async function searchMemories(pool: Pool, project: string, req: { keywords: string[]; operator?: "AND" | "OR"; offset?: number; limit?: number; upload_key_id?: string; date_from?: string; date_to?: string }) {
+export async function searchMemories(pool: Pool, project: string, req: { keywords: string[]; operator?: "AND" | "OR"; offset?: number; limit?: number; upload_key_id?: string; date_from?: string; date_to?: string; bot_id?: string; user_name?: string }) {
   assert(req && Array.isArray(req.keywords) && req.keywords.length >= 1 && req.keywords.length <= 16 && req.keywords.every(k => typeof k === "string" && k.trim().length > 0 && [...k].length <= 256), "invalid keywords");
   const op = req.operator ?? "AND", limit = req.limit ?? 10, offset = req.offset ?? 0;
   assert(req.upload_key_id === undefined || (typeof req.upload_key_id === "string" && req.upload_key_id.length <= 256), "invalid upload_key_id");
+  for (const [field, value] of [['bot_id', req.bot_id], ['user_name', req.user_name]]) {
+    assert(value === undefined || (typeof value === 'string' && value.length > 0 && value.length <= 512), 'invalid ' + field);
+  }
   const validDate = (value: string | undefined) => {
     if (value === undefined) return true;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -35,6 +38,13 @@ export async function searchMemories(pool: Pool, project: string, req: { keyword
         and coalesce(r.upload_key_id,'__unattributed__')=$5))
       and ($6::date is null or x.created_at >= $6::date)
       and ($7::date is null or x.created_at < ($7::date + interval '1 day'))
-    order by d.created_at desc,d.id offset $3 limit $4`, [project, [...new Set(req.keywords.map(k => k.replace(/[A-Z]/g, c => c.toLowerCase())))], offset, limit + 1, req.upload_key_id ?? null, req.date_from ?? null, req.date_to ?? null])).rows;
+      and (($8::text is null and $9::text is null) or exists(
+        select 1 from episode_events ee join events e on e.project_id=ee.project_id and e.id=ee.event_id
+        join raw_records r on r.project_id=e.project_id and r.id=e.raw_id
+        where ee.project_id=d.project_id and ee.episode_id=d.episode_id
+          and ($8::text is null or r.metadata->>'bot_id'=$8)
+          and ($9::text is null or r.metadata->'participant_names' ? $9)
+          and ($5::text is null or coalesce(r.upload_key_id,'__unattributed__')=$5)))
+    order by d.created_at desc,d.id offset $3 limit $4`, [project, [...new Set(req.keywords.map(k => k.replace(/[A-Z]/g, c => c.toLowerCase())))], offset, limit + 1, req.upload_key_id ?? null, req.date_from ?? null, req.date_to ?? null, req.bot_id ?? null, req.user_name ?? null])).rows;
   return { items: rows.slice(0, limit).map(r => formatMemoryDocument({ id: r.memory_id, markdown: r.markdown, episode_id: r.episode_id })), next_offset: rows.length > limit ? offset + limit : null };
 }

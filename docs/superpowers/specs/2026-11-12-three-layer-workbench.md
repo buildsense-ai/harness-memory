@@ -35,3 +35,10 @@ Session identity comes from source_id + recorded session_id; if absent, source_i
 ## Delivery and verification
 
 Preserve existing incremental ingestion changes and frozen extraction prompts. Test transcript pending-input selection against stored membership, pagination, multi-session/source isolation, Markdown sanitization, tools spanning pages, asynchronous selection and batch scroll. Run full PostgreSQL integration and production build. Merge tested commits before Monday deployment; verify deployed SHA and service reads. Collector stays outside this repository.
+
+
+## 原始名称和用户筛选
+
+会话名称仅使用日志明确记录的名称或一次性导入的 Cats Company 原始名称；缺失时省略名称，不生成主题。Bot 和用户使用下拉精确筛选，用户选项来自该 Bot 日志里实际出现的 query 发言人，不代表账户认证身份。筛选同时作用于会话、批次和记忆搜索。
+
+同一 Bot 身份与 session_id 的批次跨日志来源归组，按时间排列；无 Bot 身份或会话身份的旧记录回退到来源/流标识。原文、提取输入与提示词不变。已有数据通过 `scripts/workbench-metadata.ts PROJECT_ID [CATALOG_JSON]` 回填展示元数据；原始名称目录按项目隔离，不建立实时外部同步。

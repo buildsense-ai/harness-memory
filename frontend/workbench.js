@@ -5,7 +5,7 @@ import { messageFormat } from './message-format.js';
 
 marked.setOptions({ gfm: true, breaks: false });
 const $ = id => document.getElementById(id);
-const state = { key: '', sessions: [], batches: [], contexts: [], wikis: [], selected: null, loading: false, error: '', sessionOffset: 0, batchOffset: 0, searchHits: null, abort: null, generation: 0, uploadKeyId: '', dateFrom: '', dateTo: '', uploadKeys: [] };
+const state = { key: '', sessions: [], batches: [], contexts: [], wikis: [], selected: null, loading: false, error: '', sessionOffset: 0, batchOffset: 0, searchHits: null, abort: null, generation: 0, uploadKeyId: '', dateFrom: '', dateTo: '', uploadKeys: [], botId: '', userName: '', bots: [] };
 const graph = createGraph(selectNode);
 const labelRun = run => `${new Date(run.created_at).toLocaleString()} · ${run.status} · ${run.task_count ?? 0} tasks · ${run.published_memory_count ?? 0} Wiki`;
 function toast(text) { $('toast').textContent = text; $('toast').classList.add('visible'); setTimeout(() => $('toast').classList.remove('visible'), 2400); }
@@ -22,25 +22,36 @@ function resetData() {
   $('sessions').replaceChildren(); $('search-results').replaceChildren(); $('reader-content').replaceChildren();
   $('reader-title').textContent = ''; $('reader-id').textContent = ''; $('reader-meta').textContent = '';
 }
+function sessionLabel(session) {
+  const recorded = state.sessions.find(item => item.session_key === session?.session_key);
+  return recorded?.session_name || (recorded?.participant_names || []).join('、') || '';
+}
 function renderGraph() {
+  for (const batch of state.batches) for (const session of batch.sessions) session.display_label = sessionLabel(session);
+  for (const node of [...state.contexts, ...state.wikis]) node.sessionLabel = sessionLabel({ session_key: node.sessionKey || node.context?.sessionKey });
   graph.update({ sessions: state.sessions, batches: state.batches, contexts: state.contexts, wikis: state.wikis }, state.selected, state.searchHits);
   $('map-status').textContent = state.loading ? '加载中…' : state.error ? '读取失败' : `${state.batches.length} / ${state.totalBatches ?? state.batches.length} 批次已载入`;
   $('sample-count').textContent = `${state.wikis.length} 篇 Wiki · ${state.batches.length} 个批次`;
-  $('selection-path').textContent = state.selected ? `${state.selected.sessionLabel || state.selected.sessions?.[0]?.session_id || state.selected.sessions?.[0]?.stream_id || '来源'} / ${state.selected.runLabel || state.selected.title}` : '';
+  $('selection-path').textContent = state.selected ? `${state.selected.sessionLabel || '会话'} / ${state.selected.runLabel || state.selected.title}` : '';
 }
 function renderSidebar() {
   $('session-count').textContent = String(state.sessions.length);
   $('sessions').replaceChildren(...state.sessions.map(session => {
     const group = document.createElement('section'); group.className = 'session-group';
     const title = document.createElement('button'); title.className = 'session-name';
-    title.textContent = session.session_id || session.stream_id || session.source_id; title.title = session.session_key;
+    title.title = session.session_key;
+    const labels = document.createElement('span'); labels.className = 'session-labels';
+    if (session.session_name) { const name = document.createElement('span'); name.textContent = session.session_name; labels.append(name); }
+    const people = document.createElement('span'); people.className = 'session-people';
+    people.textContent = [session.bot_name, ...(session.participant_names || [])].filter(Boolean).join(' · ') || '会话'; labels.append(people); title.append(labels);
     title.onclick = async () => { try { state.activeSession = session; state.batches = []; state.contexts = []; state.wikis = []; state.batchOffset = 0; state.selected = null; await loadBatches(); renderSidebar(); renderGraph(); const first = state.batches[0]; if (first) await loadBatch(first.run_id); } catch (e) { toast('会话载入失败：' + e.message); } };
-    const info = document.createElement('small'); info.textContent = `${session.raw_record_count} records`;
+    const info = document.createElement('small'); info.textContent = `${state.batches.filter(b => b.sessions.some(s => s.session_key === session.session_key)).length}${state.batchNext ? '+' : ''} 批次`;
     title.append(info); group.append(title);
     const list = document.createElement('div'); list.className = 'batch-list';
-    for (const batch of state.batches.filter(b => b.sessions.some(s => s.session_key === session.session_key))) {
+    for (const batch of state.batches.filter(b => b.sessions.some(s => s.session_key === session.session_key)).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.run_id.localeCompare(b.run_id))) {
       const button = document.createElement('button'); button.className = 'batch-button' + (state.selected?.runId === batch.run_id ? ' active' : '');
-      button.textContent = new Date(batch.created_at).toLocaleString(); button.onclick = () => loadBatch(batch.run_id); list.append(button);
+      button.textContent = new Date(batch.created_at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const count = document.createElement('small'); count.textContent = `${batch.published_memory_count} Wiki`; button.append(count); button.title = labelRun(batch); button.onclick = () => loadBatch(batch.run_id); list.append(button);
     }
     group.append(list); return group;
   }));
@@ -175,7 +186,8 @@ function renderReader(preservePosition = false) {
   container.classList.toggle('conversation-view', Boolean(selection && selection.kind !== 'wiki'));
   container.replaceChildren(); $('reader-meta').replaceChildren();
   if (!selection) {
-    $('reader-label').textContent = '未连接'; container.textContent = state.error || '使用项目 Key 连接记忆服务';
+    $('reader-title').textContent = ''; $('reader-id').textContent = '';
+    $('reader-label').textContent = state.key ? '未选择' : '未连接'; container.textContent = state.error || (state.key ? '当前筛选下暂无内容' : '使用项目 Key 连接记忆服务');
     $('reader-footnote').textContent = '未读取服务器内容'; $('follow-source').disabled = true; return;
   }
   $('reader-title').textContent = selection.title; $('reader-id').textContent = selection.id;
@@ -197,7 +209,7 @@ function renderReader(preservePosition = false) {
 async function loadBatch(runId, focusWiki = null) {
   const batch = state.batches.find(item => item.run_id === runId); if (!batch) return;
   const page = { batch, events: [], nextOffset: 0 };
-  const selection = { id: runId, runId, kind: 'batch', title: focusWiki?.title || '会话原文', focusWiki, pages: [page], sessionLabel: batch.sessions?.[0]?.session_id || batch.sessions?.[0]?.stream_id, runLabel: new Date(batch.created_at).toLocaleString() };
+  const selection = { id: runId, runId, kind: 'batch', title: focusWiki?.title || '会话原文', focusWiki, pages: [page], sessionLabel: sessionLabel(batch.sessions?.[0]), runLabel: new Date(batch.created_at).toLocaleString() };
   state.selected = selection; renderGraph(); renderSidebar(); renderReader();
   await loadMoreConversation(selection);
 }
@@ -248,6 +260,8 @@ async function loadSessions(append = false) {
   const generation = state.generation;
   const params = new URLSearchParams({ limit: '50', offset: String(append ? state.sessionOffset : 0) });
   if (state.uploadKeyId) params.set('upload_key_id', state.uploadKeyId);
+  if (state.botId) params.set('bot_id', state.botId);
+  if (state.userName) params.set('user_name', state.userName);
   if (state.dateFrom) params.set('date_from', state.dateFrom);
   if (state.dateTo) params.set('date_to', state.dateTo);
   const result = await api(`/workbench/sessions?${params}`);
@@ -260,9 +274,12 @@ async function loadBatches(append = false) {
   const params = new URLSearchParams({ limit: '50', offset: String(append ? state.batchOffset : 0) });
   if (state.activeSession) params.set('session_key', state.activeSession.session_key);
   if (state.uploadKeyId) params.set('upload_key_id', state.uploadKeyId);
+  if (state.botId) params.set('bot_id', state.botId);
+  if (state.userName) params.set('user_name', state.userName);
   if (state.dateFrom) params.set('date_from', state.dateFrom);
   if (state.dateTo) params.set('date_to', state.dateTo);
   const result = await api(`/workbench/runs?${params}`);
+  if (generation !== state.generation) return;
   if (!append) state.batches = [];
   state.batches.push(...result.items); state.batchOffset = state.batches.length; state.batchNext = result.next_offset; state.totalBatches = result.total;
   const taskRuns = result.items.filter(run => run.task_count);
@@ -272,21 +289,33 @@ async function loadBatches(append = false) {
     for (const task of graphs[i].tasks) {
       const id = `${taskRuns[i].run_id}:${task.thread_id}`;
       const session = task.sessions.find(s => !state.activeSession || s.session_key === state.activeSession.session_key) || taskRuns[i].sessions[0];
-      const context = { id: `context:${id}`, kind: 'context', runId: taskRuns[i].run_id, threadId: task.thread_id, title: task.title, task, episode: task.episode, memoryId: task.episode?.memory_id, sessionKey: session?.session_key, sessionLabel: session?.session_id || session?.stream_id, runLabel: labelRun(taskRuns[i]) };
+      const context = { id: `context:${id}`, kind: 'context', runId: taskRuns[i].run_id, threadId: task.thread_id, title: task.title, task, episode: task.episode, memoryId: task.episode?.memory_id, sessionKey: session?.session_key, sessionLabel: sessionLabel(session), runLabel: labelRun(taskRuns[i]) };
       state.contexts.push(context);
       if (context.memoryId) state.wikis.push({ id: context.memoryId, kind: 'wiki', memoryId: context.memoryId, contextId: context.id, runId: context.runId, threadId: context.threadId, title: task.title, context, sessionLabel: context.sessionLabel, runLabel: context.runLabel });
     }
   }
+}
+async function loadFilterOptions() {
+  const generation = state.generation;
+  const params = new URLSearchParams();
+  if (state.uploadKeyId) params.set('upload_key_id', state.uploadKeyId);
+  const filters = await api(`/workbench/filters?${params}`);
+  if (generation !== state.generation) return;
+  state.uploadKeys = filters.upload_keys; state.bots = filters.bots;
+  if (!state.bots.some(bot => bot.bot_id === state.botId)) state.botId = '';
+  const users = state.botId ? state.bots.find(bot => bot.bot_id === state.botId).users : filters.users;
+  if (!users.includes(state.userName)) state.userName = '';
+  $('upload-key-filter').replaceChildren(new Option('全部上传来源', ''), ...state.uploadKeys.map(item => new Option(`${item.label} · ${item.record_count} 条`, item.upload_key_id ?? '__unattributed__')));
+  $('bot-filter').replaceChildren(new Option('全部 Bot', ''), ...state.bots.map(bot => new Option(bot.bot_name || bot.bot_id, bot.bot_id)));
+  $('user-filter').replaceChildren(new Option('全部用户', ''), ...users.map(user => new Option(user, user)));
+  $('upload-key-filter').value = state.uploadKeyId; $('bot-filter').value = state.botId; $('user-filter').value = state.userName;
 }
 async function connect(key) {
   state.key = key.trim(); if (!state.key) throw new Error('请填写项目 Key');
   resetData(); state.loading = true; state.error = ''; $('refresh').disabled = true;
   const generation = state.generation;
   try {
-    const filters = await api('/workbench/filters');
-    state.uploadKeys = filters.upload_keys;
-    $('upload-key-filter').replaceChildren(new Option('全部上传来源', ''), ...state.uploadKeys.map(item => new Option(`${item.label} · ${(item.harnesses || []).join(', ')} · ${(item.source_ids || []).join(', ')} · ${item.record_count} 条`, item.upload_key_id ?? '__unattributed__')));
-    $('upload-key-filter').value = state.uploadKeyId;
+    await loadFilterOptions();
     await Promise.all([loadSessions(), loadBatches()]);
     if (generation !== state.generation) return;
     state.loading = false; renderSidebar(); renderGraph();
@@ -297,16 +326,19 @@ async function connect(key) {
     $('connection-error').textContent = e.message;
   }
 }
-function disconnect() { state.key = ''; state.uploadKeyId = ''; state.dateFrom = ''; state.dateTo = ''; $('upload-key-filter').value = ''; $('date-from').value = ''; $('date-to').value = ''; resetData(); state.error = ''; $('refresh').disabled = true; $('connection-button').textContent = '连接'; renderGraph(); renderReader(); }
+function disconnect() { state.key = ''; state.botId = ''; state.userName = ''; $('bot-filter').value = ''; $('user-filter').value = ''; state.uploadKeyId = ''; state.dateFrom = ''; state.dateTo = ''; $('upload-key-filter').value = ''; $('bot-filter').value = ''; $('user-filter').value = ''; $('date-from').value = ''; $('date-to').value = ''; resetData(); state.error = ''; $('refresh').disabled = true; $('connection-button').textContent = '连接'; renderGraph(); renderReader(); }
 $('connect-form').onsubmit = async e => { e.preventDefault(); try { await connect($('project-key').value); $('project-key').value = ''; } catch (err) { $('connection-error').textContent = err.message; } };
 $('connection-button').onclick = () => { if (state.key) disconnect(); else { $('connection-dialog').showModal(); $('connection-error').textContent = ''; } };
 $('cancel-connect').onclick = () => $('connection-dialog').close();
 $('refresh').onclick = async () => { if (!state.key) return; state.loading = true; await connect(state.key); };
 $('upload-key-filter').onchange = () => applyFilters();
+$('bot-filter').onchange = () => { $('user-filter').value = ''; applyFilters(); };
+$('user-filter').onchange = () => applyFilters();
 $('date-from').onchange = () => applyFilters();
 $('date-to').onchange = () => applyFilters();
-$('clear-filters').onclick = () => { $('upload-key-filter').value = ''; $('date-from').value = ''; $('date-to').value = ''; applyFilters(); };
+$('clear-filters').onclick = () => { $('upload-key-filter').value = ''; $('bot-filter').value = ''; $('user-filter').value = ''; $('date-from').value = ''; $('date-to').value = ''; applyFilters(); };
 async function applyFilters() {
+  state.botId = $('bot-filter').value; state.userName = $('user-filter').value;
   state.uploadKeyId = $('upload-key-filter').value;
   state.dateFrom = $('date-from').value;
   state.dateTo = $('date-to').value;
@@ -316,7 +348,9 @@ async function applyFilters() {
   state.sessions = []; state.batches = []; state.contexts = []; state.wikis = []; state.selected = null;
   state.activeSession = null; state.sessionOffset = 0; state.batchOffset = 0; state.searchHits = null;
   $('search-results').replaceChildren(); $('search').value = '';
-  try { await Promise.all([loadSessions(), loadBatches()]); renderSidebar(); renderGraph(); const first = state.wikis[0] || state.contexts[0] || state.batches[0]; if (first) await selectNode(first); }
+  const generation = state.generation;
+  renderSidebar(); renderGraph(); renderReader();
+  try { await loadFilterOptions(); if (generation !== state.generation) return; await Promise.all([loadSessions(), loadBatches()]); if (generation !== state.generation) return; renderSidebar(); renderGraph(); renderReader(); const first = state.wikis[0] || state.contexts[0] || state.batches[0]; if (first) await selectNode(first); }
   catch (e) { toast('筛选数据载入失败：' + e.message); }
 }
 $('more-sessions').onclick = async () => { try { await loadSessions(true); renderSidebar(); } catch (e) { toast(e.message); } };
@@ -325,7 +359,7 @@ $('search-form').onsubmit = async e => {
   e.preventDefault(); if (!state.key) { $('connection-dialog').showModal(); return; }
   const keywords = $('search').value.trim().split(/\s+/).filter(Boolean); if (!keywords.length) { state.searchHits = null; renderGraph(); $('search-results').replaceChildren(); return; }
   try {
-    const result = await api('/memories/search', { method: 'POST', body: JSON.stringify({ keywords, operator: $('search-operator').value, limit: 10, ...(state.uploadKeyId ? { upload_key_id: state.uploadKeyId } : {}), ...(state.dateFrom ? { date_from: state.dateFrom } : {}), ...(state.dateTo ? { date_to: state.dateTo } : {}) }) });
+    const result = await api('/memories/search', { method: 'POST', body: JSON.stringify({ keywords, operator: $('search-operator').value, limit: 10, ...(state.botId ? { bot_id: state.botId } : {}), ...(state.userName ? { user_name: state.userName } : {}), ...(state.uploadKeyId ? { upload_key_id: state.uploadKeyId } : {}), ...(state.dateFrom ? { date_from: state.dateFrom } : {}), ...(state.dateTo ? { date_to: state.dateTo } : {}) }) });
     const details = await Promise.all(result.items.map(item => api('/memories/' + encodeURIComponent(item.memory_id))));
     state.searchHits = new Set(details.map(item => item.memory_id)); renderGraph();
     $('search-results').replaceChildren(...details.map(item => {
@@ -340,7 +374,7 @@ $('search-form').onsubmit = async e => {
           const task = result.tasks.find(t => t.thread_id === document.thread_id);
           if (!task) { toast('批次中找不到记忆对应的任务'); return; }
           const session = task.sessions[0] || run.sessions[0];
-          const context = { id: `context:${run.run_id}:${task.thread_id}`, runId: run.run_id, threadId: task.thread_id, title: task.title, task, episode: task.episode, memoryId: item.memory_id, sessionKey: session?.session_key, sessionLabel: session?.session_id || session?.stream_id, runLabel: labelRun(run) };
+          const context = { id: `context:${run.run_id}:${task.thread_id}`, runId: run.run_id, threadId: task.thread_id, title: task.title, task, episode: task.episode, memoryId: item.memory_id, sessionKey: session?.session_key, sessionLabel: sessionLabel(session), runLabel: labelRun(run) };
           existing = { ...context, id: item.memory_id, kind: 'wiki', memoryId: item.memory_id, context, markdown: document.markdown };
           state.contexts.push(context); state.wikis.push(existing); renderSidebar();
         }

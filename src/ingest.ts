@@ -8,6 +8,7 @@ import {
   type IngestAck,
 } from "./contracts.js";
 import { projectRecord } from "./adapters/index.js";
+import { workbenchMetadata } from "./workbench-metadata.js";
 export async function ingestBatch(
   pool: Pool,
   projectId: string,
@@ -130,6 +131,7 @@ export async function ingestBatch(
               transcript_sequence: p.transcript_sequence,
               session_id: p.session_id,
               run_id: p.run_id,
+              ...workbenchMetadata(raw, p),
               ...(r.origin ? { origin: r.origin } : {}),
             }),
             uploadKeyId ?? null,
