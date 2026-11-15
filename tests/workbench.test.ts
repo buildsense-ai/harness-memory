@@ -227,6 +227,16 @@ it("groups batches across sources by Bot and session, with exact Bot-scoped user
   expect(runs.total).toBe(2);
   expect(runs.items.map((r: any) => r.run_id).sort()).toEqual([a.run, b.run].sort());
   expect(runs.items.every((r: any) => r.sessions[0].session_key === sessions[0].session_key)).toBe(true);
+  expect(runs.items.every((r: any) => JSON.stringify(r.sessions[0].participant_names) === '["Alice"]')).toBe(true);
+  const scoped = await app.inject({ method: 'POST', url: '/v1/memories/search', headers: { authorization: 'Bearer ' + project.key }, payload: { keywords: ['筛选文档'], run_ids: [a.run], limit: 1 } });
+  expect(scoped.statusCode, scoped.body).toBe(200);
+  expect(scoped.json().items.map((item: { memory_id: string }) => item.memory_id)).toEqual([a.mem]);
+  const foreign = await app.inject({ method: 'POST', url: '/v1/memories/search', headers: { authorization: 'Bearer ' + other.key }, payload: { keywords: ['筛选文档'], run_ids: [a.run] } });
+  expect(foreign.json().items).toEqual([]);
+  const empty = await app.inject({ method: 'POST', url: '/v1/memories/search', headers: { authorization: 'Bearer ' + project.key }, payload: { keywords: ['筛选文档'], run_ids: [] } });
+  expect(empty.json().items).toEqual([]);
+  const invalid = await app.inject({ method: 'POST', url: '/v1/memories/search', headers: { authorization: 'Bearer ' + project.key }, payload: { keywords: ['筛选文档'], run_ids: [''] } });
+  expect(invalid.statusCode).toBe(400);
   const filters = (await get('/v1/workbench/filters?bot_id=bot-a')).json();
   expect(filters.users).toEqual(['Alice']);
   expect((await get(`/v1/workbench/filters?upload_key_id=${identity.upload_key_id}`)).json().users).toEqual(['Bob']);

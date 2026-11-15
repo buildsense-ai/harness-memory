@@ -8,7 +8,7 @@ All `/v1` endpoints require `Authorization: Bearer PROJECT_KEY`; the Key determi
 |---|---|---|
 | POST /v1/ingest/batches | source_id, stream_id, harness, records | Durable ACK and stable raw/event references |
 | POST /v1/ingest/complete | source_id, stream_id, acknowledged end_offset, optional leaf_id/start_offset/retry | Durable Markdown processing run_id/status |
-| POST /v1/memories/search | keywords[], optional operator AND/OR, offset, limit<=10 | Complete Markdown documents and Episode source_refs |
+| POST /v1/memories/search | keywords[], optional operator AND/OR, offset, limit<=10, run_ids[] | Complete Markdown documents and Episode source_refs |
 | GET /v1/memories/:id | — | The same complete Markdown and source_refs for one project-owned document, plus run_id and thread_id |
 | GET /v1/workbench/streams | limit, offset | Project-scoped upload streams, byte extent, raw/event counts and known server receipt times |
 | GET /v1/workbench/sessions | limit, offset | Project-scoped recorded sessions; falls back to stream identity only where no session ID was recorded |
@@ -26,6 +26,8 @@ Upload records contain `{offset,raw_base64,origin?,events?}`. `raw_base64` conta
 New `raw_records` rows record server receipt time in `received_at`; `streams.last_received_at` supports the upload-list sort. Older rows retain `NULL`, because their source timestamp does not establish when the server received them. Workbench stream counts describe stored streams and fixed processing runs; they are not an audit of every HTTP upload request.
 
 The workbench groups each model extraction snapshot as one batch, not each upload request. Session, task, Episode, memory and source mappings come from persisted session metadata, task assignments, Episode membership and memory source references. If one batch contains several recorded sessions, it remains one shared batch; no single session is inferred. Candidate context for an unpublished task is explicitly marked as a preview. The graph is paginated and reports the loaded batch count; it does not imply unloaded batches are absent.
+
+The Wiki atlas shows only memory-document nodes. Provenance is navigated in the left tree: Bot → recorded user → recorded session → processing batch. A shared batch can appear under several recorded participants; Wiki nodes are deduplicated by memory ID. Each run's `sessions[]` includes `participant_names` from that run's actual input records, not all historical participants of the session. Missing participant metadata stays unattributed. Clicking a tree scope filters the loaded Wiki graph; clicking a Wiki highlights and expands its source paths without scrolling the tree, while double-clicking explicitly scrolls to its source batch. The 2D, 3D-cluster and sphere layouts are display choices, not semantic relations. Source grouping and colors do not create graph edges.
 
 ## Current Markdown pipeline
 
@@ -52,6 +54,8 @@ XiaoBa `entry_type:"turn"` records with an ordered `messages` array, native `rol
 ```
 
 Searches the title and body of all published Markdown for this Key. Literal substrings, ASCII case-insensitive; AND requires all terms in the same document (including different paragraphs), OR any term. Mechanical source_refs are excluded from matching. Same-document matches are deduplicated before sorting/pagination/limit. Limit defaults to 10 and must be 1–10; offset defaults to 0. Newest published documents first, then ID; this is not semantic ranking. 1–16 keywords, each at most 256 Unicode codepoints. Returns `{items:[{memory_id,markdown,source_refs}],next_offset}`. Markdown is complete and contains the program-appended Episode reference. No hits returns empty items; `next_offset:null` means the end.
+
+Optional `run_ids` restricts search to specified processing snapshots **before** the result limit. It accepts at most 1,000 nonempty IDs (maximum 256 characters each); `[]` matches nothing and omission searches all otherwise eligible runs. Project authorization and all other filters still apply. The workbench uses this to search the currently selected tree scope; the scope consists of its loaded batches, with pagination visibly available for additional data.
 
 Each referenced Episode contains the exact complete Stage 2 candidate, not the whole multi-task session and not a rewritten summary. Read it through `/v1/read` below. Successful documents remain searchable if another task in the same run failed. Markdown must pass shape/schema validation before a transaction publishes it with its source Episode. Generated references are never trusted.
 
