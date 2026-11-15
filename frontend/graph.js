@@ -10,7 +10,7 @@ export function createGraph(onSelect, onReveal) {
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 1, 20000);
   const controls = new OrbitControls(camera, canvas);
   controls.minDistance = 100; controls.maxDistance = 12000;
-  controls.rotateSpeed = .65; controls.zoomSpeed = .85;
+  controls.enableRotate = false; controls.mouseButtons.LEFT = THREE.MOUSE.PAN; controls.zoomSpeed = .85;
   controls.listenToKeyEvents(canvas);
   let renderer = null, context = null;
   try {
@@ -27,7 +27,7 @@ export function createGraph(onSelect, onReveal) {
     vertexShader: 'uniform float uPixelRatio; attribute float aSize; attribute float aOpacity; varying vec3 vColor; varying float vOpacity; void main(){vColor=color;vOpacity=aOpacity;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(aSize*2000.0/max(150.0,-mv.z),16.0,90.0)*uPixelRatio;}',
     fragmentShader: 'varying vec3 vColor; varying float vOpacity; void main(){float r=length(gl_PointCoord-vec2(.5))*2.0;float a=(exp(-r*r*6.0)*.40+exp(-r*r*38.0)*.9)*(1.0-smoothstep(.60,1.0,r))*vOpacity;if(a<.003)discard;gl_FragColor=vec4(vColor,a);\n#include <colorspace_fragment>\n}',
   });
-  let points, nodes = [], selected = null, hits = null, mode = $('graph-layout').value;
+  let points, nodes = [], selected = null, hits = null, highlightedRunIds = null;
   let width = 900, height = 800, signature = '', nodeListSignature = '', simulation = null, frame = null, hovered = null;
   const cached = new Map();
   function projected(node) {
@@ -37,7 +37,7 @@ export function createGraph(onSelect, onReveal) {
   function home() {
     const radius = Math.max(180, ...nodes.map(node => Math.hypot(node.x, node.y, node.z)));
     const distance = radius / Math.tan(camera.fov * Math.PI / 360) * 1.25 / Math.min(1, width / height);
-    camera.position.set(...(mode === 'map' ? [0, 0, distance] : [distance * .22, distance * .18, distance]));
+    camera.position.set(0, 0, distance);
     controls.target.set(0, 0, 0); controls.update();
   }
   function updateGeometry() {
@@ -45,7 +45,7 @@ export function createGraph(onSelect, onReveal) {
     const geometry = points.geometry;
     nodes.forEach((node, i) => {
       geometry.attributes.position.setXYZ(i, node.x, node.y, node.z);
-      cached.set(mode + ':' + node.id, { x: node.x, y: node.y, z: node.z });
+      cached.set(node.id, { x: node.x, y: node.y, z: node.z });
     });
     geometry.attributes.position.needsUpdate = true;
     geometry.computeBoundingSphere();
@@ -54,10 +54,13 @@ export function createGraph(onSelect, onReveal) {
     const activeId = selected?.memoryId || selected?.focusWiki?.memoryId;
     nodes.forEach((node, i) => {
       node.active = node.memoryId === activeId;
-      node.related = node.runId === selected?.runId;
-      node.opacity = hits && !hits.has(node.memoryId) ? .13 : node.active ? 1 : node.related ? .95 : .78;
-      node.size = node.active ? 58 : node.related ? 38 : 29;
+      node.sourceMatch = highlightedRunIds?.has(node.runId) || false;
+      node.searchMatch = hits?.has(node.memoryId) || false;
+      node.emphasized = node.active || node.sourceMatch || node.searchMatch;
+      node.opacity = node.emphasized ? 1 : .78;
+      node.size = node.active ? 64 : node.emphasized ? 48 : 29;
       const color = new THREE.Color(palette[stableHash(node.group) % palette.length]);
+      if (node.emphasized) color.lerp(new THREE.Color('#ffffff'), node.active ? .5 : .25);
       node.color = '#' + color.getHexString();
       points.geometry.attributes.color.setXYZ(i, color.r, color.g, color.b);
       points.geometry.attributes.aSize.setX(i, node.size);
@@ -67,21 +70,22 @@ export function createGraph(onSelect, onReveal) {
     const listSignature = nodes.map(node => node.id).join('|');
     if (listSignature !== nodeListSignature) $('node-list').replaceChildren(...nodes.map(node => {
       const button = document.createElement('button'); button.textContent = node.title;
-      button.dataset.memoryId = node.memoryId; button.title = '单击阅读；双击定位左侧来源';
+      button.dataset.memoryId = node.memoryId; button.dataset.runId = node.runId; button.title = '单击阅读；双击定位左侧来源';
       button.onclick = () => onSelect(node); button.ondblclick = () => onReveal(node); return button;
     }));
     nodeListSignature = listSignature;
     for (const button of $('node-list').children) {
       const active = button.dataset.memoryId === activeId;
       button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
+      button.classList.toggle('source-match', highlightedRunIds?.has(button.dataset.runId) || false);
+      button.classList.toggle('search-match', hits?.has(button.dataset.memoryId) || false);
     }
     draw();
   }
   function rebuild(wikis) {
     simulation?.stop(); if (frame) cancelAnimationFrame(frame);
     if (points) { points.geometry.dispose(); scene.remove(points); }
-    const previous = new Map(wikis.map(wiki => [wiki.id, cached.get(mode + ':' + wiki.id)]));
-    const layout = createLayout(wikis, mode, previous); nodes = layout.nodes; simulation = layout.simulation;
+    const layout = createLayout(wikis, cached); nodes = layout.nodes; simulation = layout.simulation;
     simulation.tick(nodes.length < 500 ? 80 : 5);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(nodes.length * 3), 3));
@@ -89,10 +93,7 @@ export function createGraph(onSelect, onReveal) {
     geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(new Float32Array(nodes.length), 1));
     geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(new Float32Array(nodes.length), 1));
     points = new THREE.Points(geometry, material); points.frustumCulled = false; scene.add(points);
-    controls.enableRotate = mode !== 'map';
-    controls.mouseButtons.LEFT = mode === 'map' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
-    $('graph-instructions').textContent = mode === 'map' ? '拖拽平移 · 滚轮缩放 · 双击定位来源' : '拖拽旋转 · 右键平移 · 双击定位来源';
-    $('renderer-label').textContent = `${mode === 'map' ? '2D' : '3D'} · ${renderer ? 'WebGL' : context ? 'Canvas' : '节点列表'}`;
+    $('renderer-label').textContent = `2D · ${renderer ? 'WebGL' : context ? 'Canvas' : '节点列表'}`;
     $('graph-empty').hidden = nodes.length > 0;
     updateGeometry(); home(); paintSelection();
     // Settle, then stop rendering. Selecting a Wiki never restarts the layout.
@@ -117,20 +118,27 @@ export function createGraph(onSelect, onReveal) {
       }
       context.globalAlpha = 1;
     }
-    const boxes = [], labels = [];
-    const candidates = [...nodes].sort((a, b) => Number(b.active || b.id === hovered?.id) - Number(a.active || a.id === hovered?.id));
+    const boxes = [], labels = [], rings = [];
+    const candidates = [...nodes].sort((a, b) => (Number(b.active) * 4 + Number(b.id === hovered?.id) * 3 + Number(b.emphasized)) - (Number(a.active) * 4 + Number(a.id === hovered?.id) * 3 + Number(a.emphasized)));
     for (const node of candidates) {
-      if (!node.active && node.id !== hovered?.id && (!$('show-labels').checked || node.opacity < .3)) continue;
       const p = projected(node); if (Math.abs(p.z) >= 1 || p.x < 0 || p.x > width || p.y < 0 || p.y > height) continue;
+      if (node.emphasized) {
+        const ring = document.createElement('span');
+        ring.className = 'graph-ring' + (node.sourceMatch ? ' source-match' : '') + (node.searchMatch ? ' search-match' : '') + (node.active ? ' active' : '');
+        ring.dataset.memoryId = node.memoryId; ring.style.left = p.x + 'px'; ring.style.top = p.y + 'px'; rings.push(ring);
+      }
+      if (!node.emphasized && node.id !== hovered?.id && !$('show-labels').checked) continue;
       const labelX = Math.max(88, Math.min(width - 88, p.x));
       const labelY = Math.min(height - 38, p.y);
       const box = { x: labelX - 82, y: labelY + 15, w: 164, h: 22 };
       if (!node.active && boxes.some(b => box.x < b.x + b.w && box.x + box.w > b.x && box.y < b.y + b.h && box.y + box.h > b.y)) continue;
       boxes.push(box);
       const label = document.createElement('span'); label.className = 'graph-label wiki' + (node.active ? ' focus' : '');
-      label.textContent = node.title; label.style.left = labelX + 'px'; label.style.top = labelY + 'px'; labels.push(label);
-      if (labels.length >= 80) break;
+      label.classList.toggle('source-match', node.sourceMatch); label.classList.toggle('search-match', node.searchMatch);
+      label.dataset.memoryId = node.memoryId; label.textContent = node.title; label.style.left = labelX + 'px'; label.style.top = labelY + 'px';
+      if (labels.length < 80) labels.push(label);
     }
+    $('node-highlights').replaceChildren(...rings);
     $('labels').replaceChildren(...labels);
   }
   function resize() {
@@ -167,12 +175,10 @@ export function createGraph(onSelect, onReveal) {
   function zoom(factor) { const d = camera.position.clone().sub(controls.target).multiplyScalar(factor).clampLength(controls.minDistance, controls.maxDistance); camera.position.copy(controls.target).add(d); controls.update(); }
   $('zoom-in').onclick = () => zoom(.8); $('zoom-out').onclick = () => zoom(1.25);
   $('show-labels').onchange = draw;
-  let latestWikis = [];
-  $('graph-layout').onchange = () => { mode = $('graph-layout').value; signature = ''; rebuild(latestWikis); };
   new ResizeObserver(resize).observe(stage); resize();
-  return { update(nextData, selection, searchHits = null) {
-    latestWikis = nextData.wikis; selected = selection; hits = searchHits;
-    const next = mode + ':' + latestWikis.map(wiki => wiki.id).sort().join('|');
-    if (next !== signature) { signature = next; rebuild(latestWikis); } else paintSelection();
+  return { update(nextData, selection, searchHits = null, sourceRunIds = null) {
+    selected = selection; hits = searchHits; highlightedRunIds = sourceRunIds;
+    const next = nextData.wikis.map(wiki => wiki.id).sort().join('|');
+    if (!points || next !== signature) { signature = next; rebuild(nextData.wikis); } else paintSelection();
   } };
 }

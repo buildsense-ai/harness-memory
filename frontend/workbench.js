@@ -30,14 +30,15 @@ function sessionLabel(session) {
   return recorded?.session_name || (recorded?.participant_names || []).join('、') || '';
 }
 function treeRoots() { return buildProvenance(state.sessions, state.batches, state.bots); }
-function visibleRunIds() { return scopedRunIds(treeRoots(), state.scope); }
+function selectedSourceRunIds() { return scopedRunIds(treeRoots(), state.scope); }
 function revealSource(node, scroll = false) { sourceTree.reveal(node.runId, scroll); }
 function renderGraph() {
   for (const node of [...state.contexts, ...state.wikis]) node.sessionLabel = sessionLabel({ session_key: node.sessionKey || node.context?.sessionKey });
-  const ids = visibleRunIds(), wikis = state.wikis.filter(wiki => ids.has(wiki.runId));
-  graph.update({ wikis }, state.selected, state.searchHits);
-  $('map-status').textContent = state.loading ? '加载中…' : state.error ? '读取失败' : state.scope?.label || (state.scope?.kind === 'batch' ? '所选批次' : state.scope ? '所选会话' : '全部记忆');
-  $('sample-count').textContent = `${wikis.length} 篇 Wiki · ${ids.size} 个批次${state.batchNext ? ' · 继续载入可查看更多' : ''}`;
+  const ids = selectedSourceRunIds(), matchCount = state.wikis.filter(wiki => ids.has(wiki.runId)).length;
+  graph.update({ wikis: state.wikis }, state.selected, state.searchHits, state.scope ? ids : null);
+  $('map-status').textContent = state.loading ? '加载中…' : state.error ? '读取失败' : state.scope ? `来源高亮：${state.scope.label || (state.scope.kind === 'batch' ? '所选批次' : '所选会话')}` : '全部记忆';
+  $('map-status').title = $('map-status').textContent;
+  $('sample-count').textContent = `${state.wikis.length} 篇 Wiki · ${state.batches.length} 个批次${state.scope ? ` · 来源选中 ${matchCount} 篇` : ''}${state.searchHits ? ` · 搜索命中 ${state.searchHits.size} 篇` : ''}${state.batchNext ? ' · 可继续载入' : ''}`;
   $('selection-path').textContent = state.selected ? `${state.selected.sessionLabel || '会话'} / ${state.selected.runLabel || state.selected.title}` : '';
   $('locate-source').disabled = !state.selected;
 }
@@ -49,8 +50,7 @@ function renderSidebar() {
   $('more-runs').hidden = !state.batchNext;
 }
 async function selectScope(scope) {
-  state.scope = scope; state.searchHits = null; $('search-results').replaceChildren(); $('search').value = '';
-  if (state.selected && !visibleRunIds().has(state.selected.runId)) state.selected = null;
+  state.scope = scope;
   renderSidebar(); renderGraph(); renderReader();
   if (scope?.kind === 'batch') await loadBatch(scope.runId);
 }
@@ -347,23 +347,23 @@ $('more-runs').onclick = async () => { try { await loadBatches(true); renderSide
 $('search-form').onsubmit = async e => {
   e.preventDefault(); if (!state.key) { $('connection-dialog').showModal(); return; }
   const keywords = $('search').value.trim().split(/\s+/).filter(Boolean); if (!keywords.length) { state.searchHits = null; renderGraph(); $('search-results').replaceChildren(); return; }
-  const searchGeneration = state.generation, searchScope = state.scope?.id;
+  const searchGeneration = state.generation;
   try {
-    const result = await api('/memories/search', { method: 'POST', body: JSON.stringify({ keywords, operator: $('search-operator').value, limit: 10, ...(state.scope ? { run_ids: [...visibleRunIds()] } : {}), ...(state.uploadKeyId ? { upload_key_id: state.uploadKeyId } : {}), ...(state.dateFrom ? { date_from: state.dateFrom } : {}), ...(state.dateTo ? { date_to: state.dateTo } : {}) }) });
-    if (searchGeneration !== state.generation || searchScope !== state.scope?.id) return;
+    const result = await api('/memories/search', { method: 'POST', body: JSON.stringify({ keywords, operator: $('search-operator').value, limit: 10, ...(state.uploadKeyId ? { upload_key_id: state.uploadKeyId } : {}), ...(state.dateFrom ? { date_from: state.dateFrom } : {}), ...(state.dateTo ? { date_to: state.dateTo } : {}) }) });
+    if (searchGeneration !== state.generation) return;
     const details = await Promise.all(result.items.map(item => api('/memories/' + encodeURIComponent(item.memory_id))));
-    if (searchGeneration !== state.generation || searchScope !== state.scope?.id) return;
+    if (searchGeneration !== state.generation) return;
     state.searchHits = new Set(details.map(item => item.memory_id)); renderGraph();
     $('search-results').replaceChildren(...details.map(item => {
       const button = document.createElement('button'); button.textContent = item.markdown.split('\n').find(line => line.startsWith('# '))?.slice(2) || item.memory_id;
       button.onclick = async () => {
         try {
-          if (searchGeneration !== state.generation || searchScope !== state.scope?.id) return;
+          if (searchGeneration !== state.generation) return;
           let existing = state.wikis.find(w => w.memoryId === item.memory_id);
           if (!existing) {
             const document = details.find(d => d.memory_id === item.memory_id);
             const result = await api(`/workbench/runs/${encodeURIComponent(document.run_id)}/graph?limit=100`);
-            if (searchGeneration !== state.generation || searchScope !== state.scope?.id) return;
+            if (searchGeneration !== state.generation) return;
             const run = { ...result.run, sessions: result.run.sessions, task_count: result.total_tasks, published_memory_count: result.tasks.filter(t => t.episode?.memory_id).length };
             if (!state.batches.some(b => b.run_id === run.run_id)) state.batches.push(run);
             const task = result.tasks.find(t => t.thread_id === document.thread_id);
