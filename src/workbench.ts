@@ -13,13 +13,17 @@ const sessionIdentity = (alias: string) => `jsonb_build_array(
   coalesce(nullif(${alias}.metadata->>'session_id',''),${alias}.stream_id),
   nullif(${alias}.metadata->>'session_id','') is null)::text`;
 
-const runSessions = `select distinct ${sessionIdentity("sr")} session_key,
+const runSessions = `select ${sessionIdentity("sr")} session_key,
   sr.metadata->>'bot_id' bot_id,
   nullif(sr.metadata->>'session_id','') session_id,
-  case when nullif(sr.metadata->>'session_id','') is null then sr.stream_id end stream_id
+  case when nullif(sr.metadata->>'session_id','') is null then sr.stream_id end stream_id,
+  max(sr.metadata->>'bot_name') bot_name,
+  coalesce(array_agg(distinct participant.name order by participant.name) filter(where participant.name is not null),'{}') participant_names
   from jsonb_array_elements_text(x.input_refs) refs(event_ref)
   join events se on se.project_id=x.project_id and se.id=refs.event_ref
-  join raw_records sr on sr.project_id=se.project_id and sr.id=se.raw_id`;
+  join raw_records sr on sr.project_id=se.project_id and sr.id=se.raw_id
+  left join lateral jsonb_array_elements_text(coalesce(sr.metadata->'participant_names','[]')) participant(name) on true
+  group by 1,2,3,4`;
 
 type WorkbenchFilters = { upload_key_id?: string; date_from?: string; date_to?: string; bot_id?: string; user_name?: string };
 function validateFilters(query: WorkbenchFilters) {

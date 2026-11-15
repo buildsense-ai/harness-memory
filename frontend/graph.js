@@ -1,140 +1,137 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createLayout, stableHash } from './graph-layout.js';
 
-const palette = ['#6e8bd0', '#60a296', '#789ab9', '#bf986f', '#b28a9a', '#8391ba'];
+const palette = ['#7ba9eb', '#6ac8b7', '#d9b978', '#ba9fd8', '#dc929c', '#86baca'];
 const $ = id => document.getElementById(id);
 
-export function createGraph(onSelect) {
+export function createGraph(onSelect, onReveal) {
   const stage = $('scene'), canvas = $('graph');
-  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 1, 10000);
-  const home = new THREE.Vector3(630, 540, 1050);
-  camera.position.copy(home);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 1, 20000);
   const controls = new OrbitControls(camera, canvas);
-  controls.target.set(0, 0, 0);
-  controls.minDistance = 350; controls.maxDistance = 4000;
-  controls.minPolarAngle = .06; controls.maxPolarAngle = Math.PI - .06;
-  controls.rotateSpeed = .65; controls.zoomSpeed = .75;
+  controls.minDistance = 100; controls.maxDistance = 12000;
+  controls.rotateSpeed = .65; controls.zoomSpeed = .85;
   controls.listenToKeyEvents(canvas);
   let renderer = null, context = null;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'low-power' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setClearColor(0xfcfcfc, 1);
+    renderer.setClearColor(0x12171e, 1);
   } catch {
-    try { context = canvas.getContext('2d'); } catch { /* Accessible node list remains available. */ }
+    try { context = canvas.getContext('2d'); } catch { /* The node list remains usable without a rendering context. */ }
   }
-  $('renderer-label').textContent = renderer ? '3D · WebGL' : context ? '3D · Canvas' : '节点列表';
   $('graph-error').hidden = Boolean(renderer || context);
   const material = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, vertexColors: true,
     uniforms: { uPixelRatio: { value: renderer ? renderer.getPixelRatio() : 1 } },
-    vertexShader: 'uniform float uPixelRatio; attribute float aSize; varying vec3 vColor; void main(){vColor=color;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(aSize*1050.0/max(150.0,-mv.z),8.0,78.0)*uPixelRatio;}',
-    fragmentShader: 'varying vec3 vColor; void main(){float r=length(gl_PointCoord-vec2(.5))*2.0;float a=(exp(-r*r*4.8)*.27+exp(-r*r*34.0)*.75)*smoothstep(1.0,.50,r);if(a<.002)discard;gl_FragColor=vec4(vColor,a);\n#include <colorspace_fragment>\n}',
+    vertexShader: 'uniform float uPixelRatio; attribute float aSize; attribute float aOpacity; varying vec3 vColor; varying float vOpacity; void main(){vColor=color;vOpacity=aOpacity;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(aSize*2000.0/max(150.0,-mv.z),16.0,90.0)*uPixelRatio;}',
+    fragmentShader: 'varying vec3 vColor; varying float vOpacity; void main(){float r=length(gl_PointCoord-vec2(.5))*2.0;float a=(exp(-r*r*6.0)*.40+exp(-r*r*38.0)*.9)*(1.0-smoothstep(.60,1.0,r))*vOpacity;if(a<.003)discard;gl_FragColor=vec4(vColor,a);\n#include <colorspace_fragment>\n}',
   });
-  let points, nodes = [], segments = [], labels = [], lines = new THREE.Group();
-  let width = 900, height = 800, selected = null, hits = null;
-  let data = { batches: [], contexts: [], wikis: [] };
-  scene.add(lines);
-  const projected = v => {
-    const p = v.clone().project(camera);
+  let points, nodes = [], selected = null, hits = null, mode = $('graph-layout').value;
+  let width = 900, height = 800, signature = '', nodeListSignature = '', simulation = null, frame = null, hovered = null;
+  const cached = new Map();
+  function projected(node) {
+    const p = new THREE.Vector3(node.x, node.y, node.z).project(camera);
     return { x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2, z: p.z };
-  };
-  function segment(a, b, color, opacity) {
-    segments.push({ a, b, color, opacity });
-    lines.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]),
-      new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false })));
   }
-  function rebuild() {
-    for (const line of [...lines.children]) { line.geometry.dispose(); line.material.dispose(); lines.remove(line); }
-    if (points) { points.geometry.dispose(); scene.remove(points); }
-    nodes = []; segments = []; labels = [];
-    const positions = new Map(), batchGroups = new Map();
-    for (const b of data.batches) {
-      const key = b.sessions.length === 1 ? b.sessions[0].session_key : `shared:${b.run_id}`;
-      if (!batchGroups.has(key)) batchGroups.set(key, []);
-      batchGroups.get(key).push(b);
-    }
-    const entries = [...batchGroups];
-    entries.forEach(([key, batches], i) => {
-      batches.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.run_id.localeCompare(b.run_id));
-      const columns = Math.min(3, entries.length);
-      const cx = ((i % columns) - (columns - 1) / 2) * 280;
-      const cz = (Math.floor(i / columns) - (Math.ceil(entries.length / columns) - 1) / 2) * 170;
-      batches.forEach((b, j) => positions.set(b.run_id, new THREE.Vector3(cx + (j - (batches.length - 1) / 2) * Math.min(55, 230 / Math.max(1, batches.length)), -235, cz)));
-      const first = positions.get(batches[0].run_id), last = positions.get(batches.at(-1).run_id);
-      segment(first, last, '#9aa4b3', .35);
-      const session = batches[0].sessions;
-      labels.push({ position: first.clone().lerp(last, .5).add(new THREE.Vector3(0, 0, -30)), title: session.length === 1 ? session[0].display_label || '会话' : '多个会话', kind: 'session' });
+  function home() {
+    const radius = Math.max(180, ...nodes.map(node => Math.hypot(node.x, node.y, node.z)));
+    const distance = radius / Math.tan(camera.fov * Math.PI / 360) * 1.25 / Math.min(1, width / height);
+    camera.position.set(...(mode === 'map' ? [0, 0, distance] : [distance * .22, distance * .18, distance]));
+    controls.target.set(0, 0, 0); controls.update();
+  }
+  function updateGeometry() {
+    if (!points) return;
+    const geometry = points.geometry;
+    nodes.forEach((node, i) => {
+      geometry.attributes.position.setXYZ(i, node.x, node.y, node.z);
+      cached.set(mode + ':' + node.id, { x: node.x, y: node.y, z: node.z });
     });
-    for (const y of [235, -235]) {
-      const corners = [[-445, y, -245], [445, y, -245], [445, y, 245], [-445, y, 245]].map(p => new THREE.Vector3(...p));
-      for (let i = 0; i < 4; i++) segment(corners[i], corners[(i + 1) % 4], '#b9c0c8', .21);
-      labels.push({ position: corners[0], title: y === 235 ? 'Wiki' : '会话批次', kind: 'layer' });
-    }
-    const activeRun = selected?.runId;
-    const vertices = [], colors = [], sizes = [];
-    const add = node => {
-      const active = node.id === selected?.id || node.id === selected?.focusWiki?.id;
-      const related = node.runId === activeRun;
-      const match = !hits || node.kind === 'batch' || hits.has(node.memoryId);
-      const color = new THREE.Color(node.color);
-      if (!match) color.lerp(new THREE.Color('#ebedef'), .8);
-      nodes.push({ ...node, active, related, color: '#' + color.getHexString() });
-      vertices.push(node.position.x, node.position.y, node.position.z);
-      colors.push(color.r, color.g, color.b); sizes.push(active ? 65 : related ? 47 : 32);
-    };
-    data.batches.forEach(b => {
-      const p = positions.get(b.run_id);
-      add({ id: b.run_id, runId: b.run_id, kind: 'batch', position: p, color: '#8b98aa', title: `${new Date(b.created_at).toLocaleString()} · ${b.task_count ?? 0} 个目标` + (b.sessions.length > 1 ? ' · 多会话' : '') });
-      segment(p.clone().add(new THREE.Vector3(-8, 0, 0)), p.clone().add(new THREE.Vector3(8, 0, 0)), '#8e98a7', .7);
+    geometry.attributes.position.needsUpdate = true;
+    geometry.computeBoundingSphere();
+  }
+  function paintSelection() {
+    const activeId = selected?.memoryId || selected?.focusWiki?.memoryId;
+    nodes.forEach((node, i) => {
+      node.active = node.memoryId === activeId;
+      node.related = node.runId === selected?.runId;
+      node.opacity = hits && !hits.has(node.memoryId) ? .13 : node.active ? 1 : node.related ? .95 : .78;
+      node.size = node.active ? 58 : node.related ? 38 : 29;
+      const color = new THREE.Color(palette[stableHash(node.group) % palette.length]);
+      node.color = '#' + color.getHexString();
+      points.geometry.attributes.color.setXYZ(i, color.r, color.g, color.b);
+      points.geometry.attributes.aSize.setX(i, node.size);
+      points.geometry.attributes.aOpacity.setX(i, node.opacity);
     });
-    const wikisByRun = new Map();
-    for (const wiki of data.wikis) { if (!wikisByRun.has(wiki.runId)) wikisByRun.set(wiki.runId, []); wikisByRun.get(wiki.runId).push(wiki); }
-    for (const [runId, wikis] of wikisByRun) {
-      const batch = positions.get(runId); if (!batch) continue;
-      wikis.forEach((wiki, index) => {
-        const angle = index * 2.39996323, radius = wikis.length === 1 ? 0 : 32 + Math.sqrt(index) * 20;
-        const p = new THREE.Vector3(batch.x + Math.cos(angle) * radius, 235, batch.z + Math.sin(angle) * radius * .8);
-        const color = palette[index % palette.length];
-        add({ ...wiki, position: p, kind: 'wiki', color });
-        if ($('show-links').checked || runId === activeRun) segment(p, batch, color, runId === activeRun ? .5 : .12);
-      });
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1));
-    points = new THREE.Points(geometry, material); points.frustumCulled = false; scene.add(points);
-    $('node-list').replaceChildren(...nodes.map(n => {
-      const button = document.createElement('button'); button.textContent = `${n.kind === 'wiki' ? 'Wiki' : '批次'} · ${n.title}`;
-      button.classList.toggle('active', n.active); button.onclick = () => onSelect(n); return button;
+    if (points) for (const name of ['color', 'aSize', 'aOpacity']) points.geometry.attributes[name].needsUpdate = true;
+    const listSignature = nodes.map(node => node.id).join('|');
+    if (listSignature !== nodeListSignature) $('node-list').replaceChildren(...nodes.map(node => {
+      const button = document.createElement('button'); button.textContent = node.title;
+      button.dataset.memoryId = node.memoryId; button.title = '单击阅读；双击定位左侧来源';
+      button.onclick = () => onSelect(node); button.ondblclick = () => onReveal(node); return button;
     }));
+    nodeListSignature = listSignature;
+    for (const button of $('node-list').children) {
+      const active = button.dataset.memoryId === activeId;
+      button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
+    }
     draw();
+  }
+  function rebuild(wikis) {
+    simulation?.stop(); if (frame) cancelAnimationFrame(frame);
+    if (points) { points.geometry.dispose(); scene.remove(points); }
+    const previous = new Map(wikis.map(wiki => [wiki.id, cached.get(mode + ':' + wiki.id)]));
+    const layout = createLayout(wikis, mode, previous); nodes = layout.nodes; simulation = layout.simulation;
+    simulation.tick(nodes.length < 500 ? 80 : 5);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(nodes.length * 3), 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(nodes.length * 3), 3));
+    geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(new Float32Array(nodes.length), 1));
+    geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(new Float32Array(nodes.length), 1));
+    points = new THREE.Points(geometry, material); points.frustumCulled = false; scene.add(points);
+    controls.enableRotate = mode !== 'map';
+    controls.mouseButtons.LEFT = mode === 'map' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+    $('graph-instructions').textContent = mode === 'map' ? '拖拽平移 · 滚轮缩放 · 双击定位来源' : '拖拽旋转 · 右键平移 · 双击定位来源';
+    $('renderer-label').textContent = `${mode === 'map' ? '2D' : '3D'} · ${renderer ? 'WebGL' : context ? 'Canvas' : '节点列表'}`;
+    $('graph-empty').hidden = nodes.length > 0;
+    updateGeometry(); home(); paintSelection();
+    // Settle, then stop rendering. Selecting a Wiki never restarts the layout.
+    function settle() {
+      if (document.hidden) { frame = null; return; }
+      simulation.tick(); updateGeometry(); draw();
+      if (simulation.alpha() > simulation.alphaMin()) frame = requestAnimationFrame(settle); else { frame = null; simulation.stop(); }
+    }
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches && nodes.length) frame = requestAnimationFrame(settle);
+    else { simulation.tick(90); updateGeometry(); home(); draw(); }
   }
   function draw() {
     camera.updateMatrixWorld();
     if (renderer) renderer.render(scene, camera);
     else if (context) {
-      context.clearRect(0, 0, width, height);
-      context.fillStyle = '#fcfcfc'; context.fillRect(0, 0, width, height);
-      for (const s of segments) {
-        const a = projected(s.a), b = projected(s.b); if (Math.abs(a.z) >= 1 || Math.abs(b.z) >= 1) continue;
-        context.globalAlpha = s.opacity; context.strokeStyle = s.color; context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.stroke();
+      context.clearRect(0, 0, width, height); context.fillStyle = '#12171e'; context.fillRect(0, 0, width, height);
+      for (const node of [...nodes].sort((a, b) => projected(b).z - projected(a).z)) {
+        const p = projected(node); if (Math.abs(p.z) >= 1) continue;
+        const r = node.size * .55, g = context.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+        g.addColorStop(0, node.color); g.addColorStop(.18, node.color + 'aa'); g.addColorStop(1, node.color + '00');
+        context.globalAlpha = node.opacity; context.fillStyle = g; context.fillRect(p.x - r, p.y - r, r * 2, r * 2);
       }
       context.globalAlpha = 1;
-      for (const n of [...nodes].sort((a, b) => projected(b.position).z - projected(a.position).z)) {
-        const p = projected(n.position); if (Math.abs(p.z) >= 1) continue;
-        const r = n.active ? 20 : n.related ? 15 : 11;
-        const g = context.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-        g.addColorStop(0, n.color + 'dc'); g.addColorStop(.2, n.color + '88'); g.addColorStop(1, n.color + '00');
-        context.fillStyle = g; context.fillRect(p.x - r, p.y - r, r * 2, r * 2);
-      }
     }
-    $('labels').replaceChildren(...[...labels, ...nodes.filter(n => $('show-labels').checked || n.active)].flatMap(n => {
-      const p = projected(n.position); if (Math.abs(p.z) >= 1) return [];
-      const label = document.createElement('span'); label.className = 'graph-label ' + n.kind + (n.active ? ' focus' : '');
-      label.textContent = n.title; label.style.left = p.x + 'px'; label.style.top = p.y + 'px'; return [label];
-    }));
+    const boxes = [], labels = [];
+    const candidates = [...nodes].sort((a, b) => Number(b.active || b.id === hovered?.id) - Number(a.active || a.id === hovered?.id));
+    for (const node of candidates) {
+      if (!node.active && node.id !== hovered?.id && (!$('show-labels').checked || node.opacity < .3)) continue;
+      const p = projected(node); if (Math.abs(p.z) >= 1 || p.x < 0 || p.x > width || p.y < 0 || p.y > height) continue;
+      const labelX = Math.max(88, Math.min(width - 88, p.x));
+      const labelY = Math.min(height - 38, p.y);
+      const box = { x: labelX - 82, y: labelY + 15, w: 164, h: 22 };
+      if (!node.active && boxes.some(b => box.x < b.x + b.w && box.x + box.w > b.x && box.y < b.y + b.h && box.y + box.h > b.y)) continue;
+      boxes.push(box);
+      const label = document.createElement('span'); label.className = 'graph-label wiki' + (node.active ? ' focus' : '');
+      label.textContent = node.title; label.style.left = labelX + 'px'; label.style.top = labelY + 'px'; labels.push(label);
+      if (labels.length >= 80) break;
+    }
+    $('labels').replaceChildren(...labels);
   }
   function resize() {
     width = stage.clientWidth || 900; height = stage.clientHeight || 800;
@@ -142,32 +139,40 @@ export function createGraph(onSelect) {
     if (renderer) renderer.setSize(width, height, false); else { canvas.width = width; canvas.height = height; }
     draw();
   }
-  function pick(e) {
-    const rect = canvas.getBoundingClientRect(); let best = null, distance = 19;
-    for (const n of nodes) { const p = projected(n.position); if (Math.abs(p.z) >= 1) continue;
-      const d = Math.hypot(e.clientX - rect.left - p.x, e.clientY - rect.top - p.y);
-      if (d < distance) { distance = d; best = n; }
-    } return best;
+  function pick(event) {
+    const rect = canvas.getBoundingClientRect(); let best = null, distance = 18;
+    for (const node of nodes) {
+      const p = projected(node); if (Math.abs(p.z) >= 1) continue;
+      const d = Math.hypot(event.clientX - rect.left - p.x, event.clientY - rect.top - p.y);
+      if (d < distance) { distance = d; best = node; }
+    }
+    return best;
   }
   let start = null;
-  canvas.addEventListener('pointerdown', e => { start = [e.clientX, e.clientY]; });
-  canvas.addEventListener('pointerup', e => {
-    if (start && e.button === 0 && Math.hypot(e.clientX - start[0], e.clientY - start[1]) < 5) { const node = pick(e); if (node) onSelect(node); }
+  canvas.addEventListener('pointerdown', event => { start = [event.clientX, event.clientY]; });
+  canvas.addEventListener('pointerup', event => {
+    if (start && event.button === 0 && Math.hypot(event.clientX - start[0], event.clientY - start[1]) < 5) { const node = pick(event); if (node) onSelect(node); }
     start = null;
   });
-  canvas.addEventListener('pointermove', e => {
-    const node = e.buttons ? null : pick(e), tip = $('hover-tip');
-    tip.style.display = node ? 'block' : 'none'; canvas.style.cursor = node ? 'pointer' : 'grab';
-    if (node) { const rect = canvas.getBoundingClientRect(); tip.textContent = node.title; tip.style.left = Math.max(5, Math.min(width - 220, e.clientX - rect.left + 14)) + 'px'; tip.style.top = Math.min(height - 50, e.clientY - rect.top + 14) + 'px'; }
+  canvas.addEventListener('dblclick', event => { const node = pick(event); if (node) onReveal(node); });
+  canvas.addEventListener('pointermove', event => {
+    hovered = event.buttons ? null : pick(event); const tip = $('hover-tip');
+    tip.style.display = hovered ? 'block' : 'none'; canvas.style.cursor = hovered ? 'pointer' : 'grab';
+    if (hovered) { const rect = canvas.getBoundingClientRect(); tip.textContent = hovered.title; tip.style.left = Math.max(5, Math.min(width - 230, event.clientX - rect.left + 14)) + 'px'; tip.style.top = Math.min(height - 60, event.clientY - rect.top + 14) + 'px'; }
+    draw();
   });
-  canvas.addEventListener('pointerleave', () => { start = null; $('hover-tip').style.display = 'none'; });
+  canvas.addEventListener('pointerleave', () => { start = null; hovered = null; $('hover-tip').style.display = 'none'; draw(); });
   controls.addEventListener('change', draw);
-  $('reset').onclick = () => { camera.position.copy(home); controls.target.set(0, 0, 0); controls.update(); draw(); };
-  $('view-front').onclick = () => { camera.position.set(80, 260, 1400); controls.target.set(0, 0, 0); controls.update(); };
-  $('view-top').onclick = () => { camera.position.set(0, 1400, 1); controls.target.set(0, 0, 0); controls.update(); };
+  $('reset').onclick = home;
   function zoom(factor) { const d = camera.position.clone().sub(controls.target).multiplyScalar(factor).clampLength(controls.minDistance, controls.maxDistance); camera.position.copy(controls.target).add(d); controls.update(); }
-  $('zoom-in').onclick = () => zoom(.88); $('zoom-out').onclick = () => zoom(1.12);
-  $('show-labels').onchange = draw; $('show-links').onchange = rebuild;
+  $('zoom-in').onclick = () => zoom(.8); $('zoom-out').onclick = () => zoom(1.25);
+  $('show-labels').onchange = draw;
+  let latestWikis = [];
+  $('graph-layout').onchange = () => { mode = $('graph-layout').value; signature = ''; rebuild(latestWikis); };
   new ResizeObserver(resize).observe(stage); resize();
-  return { update(nextData, selection, searchHits = null) { data = nextData; selected = selection; hits = searchHits; rebuild(); } };
+  return { update(nextData, selection, searchHits = null) {
+    latestWikis = nextData.wikis; selected = selection; hits = searchHits;
+    const next = mode + ':' + latestWikis.map(wiki => wiki.id).sort().join('|');
+    if (next !== signature) { signature = next; rebuild(latestWikis); } else paintSelection();
+  } };
 }
