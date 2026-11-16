@@ -1,5 +1,34 @@
 const key = (...parts) => JSON.stringify(parts);
 
+// Keep a shared session together, even when different batches record different participants.
+export function graphSources(wikis, sessions, batches) {
+  const records = new Map();
+  for (const session of [...sessions, ...batches.flatMap(batch => batch.sessions)]) {
+    const prior = records.get(session.session_key);
+    records.set(session.session_key, { ...session, ...prior,
+      participant_names: [...new Set([...(prior?.participant_names || []), ...(session.participant_names || [])])].sort() });
+  }
+  const runs = new Map(batches.map(batch => [batch.run_id, batch]));
+  return wikis.map(wiki => {
+    const run = runs.get(wiki.runId);
+    const references = wiki.context?.task?.sessions?.length ? wiki.context.task.sessions
+      : [{ session_key: wiki.sessionKey || wiki.context?.sessionKey }];
+    const sessionKeys = [...new Set(references.map(item => item.session_key).filter(Boolean))].sort();
+    if (!sessionKeys.length) sessionKeys.push(...(run?.sessions || []).map(item => item.session_key).sort());
+    const sources = sessionKeys.map(id => records.get(id)).filter(Boolean);
+    const users = [...new Set(sources.flatMap(item => item.participant_names || []))].sort();
+    const bots = [...new Set(sources.map(item => item.bot_id || ''))].sort();
+    const sessionId = key('sessions', sessionKeys.length ? sessionKeys : [wiki.runId]);
+    return { ...wiki, layoutSource: {
+      userId: key('users', bots, users), userLabel: users.join('、') || '未记录用户',
+      sessionId, sessionLabel: sources.map(item => item.session_name).filter(Boolean).join(' / ') || (sessionKeys.length > 1 ? '跨会话' : '会话'),
+      batchId: key('batch', sessionId, wiki.runId),
+      batchLabel: run?.created_at ? new Date(run.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '处理批次',
+      batchOrder: run?.created_at || wiki.runId,
+    } };
+  });
+}
+
 export function buildProvenance(sessions, batches, bots = []) {
   const bySession = new Map(sessions.map(session => [session.session_key, session]));
   for (const batch of batches) for (const session of batch.sessions) {

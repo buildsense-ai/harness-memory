@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { buildProvenance, flattenTree, scopedRunIds, sourcePaths } from '../frontend/provenance.js';
+import { buildProvenance, flattenTree, scopedRunIds, sourcePaths, graphSources } from '../frontend/provenance.js';
 
 const session = { session_key: 's1', bot_id: 'bot1', session_name: '真实会话名', participant_names: ['Alice', 'Bob'] };
 const batch = (run_id: string, participants: string[], session_key = 's1') => ({
@@ -37,4 +37,24 @@ it('hydrates missing session records from batch membership and orders batches ch
   const later = { ...batch('later', ['Alice']), created_at: '2026-11-15T09:00:00Z' };
   const roots = buildProvenance([], [later, batch('earlier', ['Alice'])]);
   expect(flattenTree(roots).filter(node => node.kind === 'batch').map(node => node.runId)).toEqual(['earlier', 'later']);
+});
+
+it('groups shared sessions once using all recorded participants across batches', () => {
+  const wikis = ['r1', 'r2'].map(runId => ({ id: runId, runId, context: { sessionKey: 's1' } }));
+  const result = graphSources(wikis, [session], [batch('r1', ['Alice']), batch('r2', ['Bob'])]);
+  expect(result).toHaveLength(2);
+  expect(result[0].layoutSource.userLabel).toBe('Alice、Bob');
+  expect(result[0].layoutSource.userId).toBe(result[1].layoutSource.userId);
+  expect(result[0].layoutSource.sessionId).toBe(result[1].layoutSource.sessionId);
+  expect(result[0].layoutSource.sessionLabel).toBe('真实会话名');
+  expect(result[0].layoutSource.batchId).not.toBe(result[1].layoutSource.batchId);
+});
+
+it('keeps same-name users from different bots separate and does not attribute cross-session memories to the first session', () => {
+  const other = { ...session, session_key: 's2', bot_id: 'bot2' };
+  const wikis = ['s1', 's2'].map(sessionKey => ({ id: sessionKey, runId: 'r', context: { sessionKey } }));
+  const result = graphSources([...wikis, { id: 'shared', runId: 'r', context: { task: { sessions: [{ session_key: 's1' }, { session_key: 's2' }] } } }], [session, other], []);
+  expect(result[0].layoutSource.userId).not.toBe(result[1].layoutSource.userId);
+  expect(result[2].layoutSource.sessionId).not.toBe(result[0].layoutSource.sessionId);
+  expect(result[2].layoutSource.sessionId).not.toBe(result[1].layoutSource.sessionId);
 });
