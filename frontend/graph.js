@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createLayout, stableHash } from './graph-layout.js';
 
-const palette = ['#7ba9eb', '#6ac8b7', '#d9b978', '#ba9fd8', '#dc929c', '#86baca'];
+const palette = ['#4c79ac', '#418b80', '#b78c48', '#8e73ae', '#b76c72', '#4f889f'];
 const $ = id => document.getElementById(id);
 
 export function createGraph(onSelect, onReveal) {
@@ -14,9 +14,9 @@ export function createGraph(onSelect, onReveal) {
   controls.listenToKeyEvents(canvas);
   let renderer = null, context = null;
   try {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'low-power' });
+    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setClearColor(0x12171e, 1);
+    renderer.setClearColor(0xffffff, 0);
   } catch {
     try { context = canvas.getContext('2d'); } catch { /* The node list remains usable without a rendering context. */ }
   }
@@ -24,18 +24,17 @@ export function createGraph(onSelect, onReveal) {
   const material = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, vertexColors: true,
     uniforms: { uPixelRatio: { value: renderer ? renderer.getPixelRatio() : 1 } },
-    vertexShader: 'uniform float uPixelRatio; attribute float aSize; attribute float aOpacity; varying vec3 vColor; varying float vOpacity; void main(){vColor=color;vOpacity=aOpacity;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(aSize*2000.0/max(150.0,-mv.z),16.0,90.0)*uPixelRatio;}',
-    fragmentShader: 'varying vec3 vColor; varying float vOpacity; void main(){float r=length(gl_PointCoord-vec2(.5))*2.0;float a=(exp(-r*r*6.0)*.40+exp(-r*r*38.0)*.9)*(1.0-smoothstep(.60,1.0,r))*vOpacity;if(a<.003)discard;gl_FragColor=vec4(vColor,a);\n#include <colorspace_fragment>\n}',
+    vertexShader: 'uniform float uPixelRatio; attribute float aSize; attribute float aOpacity; varying vec3 vColor; varying float vOpacity; void main(){vColor=color;vOpacity=aOpacity;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(aSize*1200.0/max(150.0,-mv.z),7.0,32.0)*uPixelRatio;}',
+    fragmentShader: 'varying vec3 vColor; varying float vOpacity; void main(){float r=length(gl_PointCoord-vec2(.5))*2.0;float a=(1.0-smoothstep(.82,1.0,r))*vOpacity;if(a<.01)discard;gl_FragColor=vec4(vColor,a);\n#include <colorspace_fragment>\n}',
   });
-  let points, nodes = [], selected = null, hits = null, highlightedRunIds = null;
-  let width = 900, height = 800, signature = '', nodeListSignature = '', simulation = null, frame = null, hovered = null;
-  const cached = new Map();
+  let points, nodes = [], selected = null, hits = null, highlightedRunIds = null, groupColors = new Map();
+  let width = 900, height = 800, signature = '', nodeListSignature = '', hovered = null, clusters = [], layoutRadius = 180;
   function projected(node) {
     const p = new THREE.Vector3(node.x, node.y, node.z).project(camera);
     return { x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2, z: p.z };
   }
   function home() {
-    const radius = Math.max(180, ...nodes.map(node => Math.hypot(node.x, node.y, node.z)));
+    const radius = Math.max(180, layoutRadius);
     const distance = radius / Math.tan(camera.fov * Math.PI / 360) * 1.25 / Math.min(1, width / height);
     camera.position.set(0, 0, distance);
     controls.target.set(0, 0, 0); controls.update();
@@ -45,7 +44,6 @@ export function createGraph(onSelect, onReveal) {
     const geometry = points.geometry;
     nodes.forEach((node, i) => {
       geometry.attributes.position.setXYZ(i, node.x, node.y, node.z);
-      cached.set(node.id, { x: node.x, y: node.y, z: node.z });
     });
     geometry.attributes.position.needsUpdate = true;
     geometry.computeBoundingSphere();
@@ -58,9 +56,9 @@ export function createGraph(onSelect, onReveal) {
       node.searchMatch = hits?.has(node.memoryId) || false;
       node.emphasized = node.active || node.sourceMatch || node.searchMatch;
       node.opacity = node.emphasized ? 1 : .78;
-      node.size = node.active ? 64 : node.emphasized ? 48 : 29;
-      const color = new THREE.Color(palette[stableHash(node.group) % palette.length]);
-      if (node.emphasized) color.lerp(new THREE.Color('#ffffff'), node.active ? .5 : .25);
+      node.size = node.active ? 20 : node.emphasized ? 17 : 12;
+      const color = new THREE.Color(groupColors.get(node.group) || palette[stableHash(node.group) % palette.length]);
+      if (node.emphasized) color.multiplyScalar(node.active ? .65 : .85);
       node.color = '#' + color.getHexString();
       points.geometry.attributes.color.setXYZ(i, color.r, color.g, color.b);
       points.geometry.attributes.aSize.setX(i, node.size);
@@ -83,10 +81,9 @@ export function createGraph(onSelect, onReveal) {
     draw();
   }
   function rebuild(wikis) {
-    simulation?.stop(); if (frame) cancelAnimationFrame(frame);
     if (points) { points.geometry.dispose(); scene.remove(points); }
-    const layout = createLayout(wikis, cached); nodes = layout.nodes; simulation = layout.simulation;
-    simulation.tick(nodes.length < 500 ? 80 : 5);
+    const layout = createLayout(wikis); nodes = layout.nodes; clusters = layout.clusters; layoutRadius = layout.radius;
+    groupColors = new Map([...new Set(nodes.map(node => node.group))].sort().map((group, i) => [group, palette[i % palette.length]]));
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(nodes.length * 3), 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(nodes.length * 3), 3));
@@ -96,25 +93,45 @@ export function createGraph(onSelect, onReveal) {
     $('renderer-label').textContent = `2D · ${renderer ? 'WebGL' : context ? 'Canvas' : '节点列表'}`;
     $('graph-empty').hidden = nodes.length > 0;
     updateGeometry(); home(); paintSelection();
-    // Settle, then stop rendering. Selecting a Wiki never restarts the layout.
-    function settle() {
-      if (document.hidden) { frame = null; return; }
-      simulation.tick(); updateGeometry(); draw();
-      if (simulation.alpha() > simulation.alphaMin()) frame = requestAnimationFrame(settle); else { frame = null; simulation.stop(); }
+  }
+  function drawClusters() {
+    const svg = $('cluster-regions'), namespace = 'http://www.w3.org/2000/svg';
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    const elements = [];
+    for (const cluster of clusters) {
+      const p = projected({ ...cluster, z: 0 }), edge = projected({ x: cluster.x + cluster.radius, y: cluster.y, z: 0 });
+      const radius = Math.abs(edge.x - p.x);
+      if (radius < 3 || Math.abs(p.z) >= 1) continue;
+      const group = document.createElementNS(namespace, 'g');
+      group.setAttribute('class', `cluster-region ${cluster.kind}`); group.dataset.clusterId = cluster.id;
+      const circle = document.createElementNS(namespace, 'circle');
+      circle.setAttribute('cx', p.x); circle.setAttribute('cy', p.y); circle.setAttribute('r', radius);
+      group.append(circle);
+      // Labels use the space reserved inside each enclosing circle; zoom reveals smaller groups.
+      const minimum = cluster.kind === 'batch' ? 48 : cluster.kind === 'session' ? 60 : 30;
+      if (radius > minimum) {
+        const text = document.createElementNS(namespace, 'text');
+        text.setAttribute('x', p.x); text.setAttribute('y', p.y - radius + (cluster.kind === 'user' ? 17 : 14));
+        const maxCharacters = Math.max(5, Math.floor(radius * 1.2 / 10));
+        text.textContent = cluster.label.length > maxCharacters ? cluster.label.slice(0, maxCharacters) + '…' : cluster.label;
+        group.append(text);
+      }
+      elements.push(group);
     }
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches && nodes.length) frame = requestAnimationFrame(settle);
-    else { simulation.tick(90); updateGeometry(); home(); draw(); }
+    // Parents first, so their fill never covers the nested groups.
+    elements.sort((a, b) => ['user', 'session', 'batch'].indexOf(a.classList[1]) - ['user', 'session', 'batch'].indexOf(b.classList[1]));
+    svg.replaceChildren(...elements);
   }
   function draw() {
     camera.updateMatrixWorld();
+    drawClusters();
     if (renderer) renderer.render(scene, camera);
     else if (context) {
-      context.clearRect(0, 0, width, height); context.fillStyle = '#12171e'; context.fillRect(0, 0, width, height);
+      context.clearRect(0, 0, width, height);
       for (const node of [...nodes].sort((a, b) => projected(b).z - projected(a).z)) {
         const p = projected(node); if (Math.abs(p.z) >= 1) continue;
-        const r = node.size * .55, g = context.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-        g.addColorStop(0, node.color); g.addColorStop(.18, node.color + 'aa'); g.addColorStop(1, node.color + '00');
-        context.globalAlpha = node.opacity; context.fillStyle = g; context.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+        const r = Math.min(32, Math.max(7, node.size * 1200 / camera.position.distanceTo(controls.target))) / 2;
+        context.globalAlpha = node.opacity; context.fillStyle = node.color; context.beginPath(); context.arc(p.x, p.y, r, 0, Math.PI * 2); context.fill();
       }
       context.globalAlpha = 1;
     }
@@ -178,7 +195,7 @@ export function createGraph(onSelect, onReveal) {
   new ResizeObserver(resize).observe(stage); resize();
   return { update(nextData, selection, searchHits = null, sourceRunIds = null) {
     selected = selection; hits = searchHits; highlightedRunIds = sourceRunIds;
-    const next = nextData.wikis.map(wiki => wiki.id).sort().join('|');
+    const next = nextData.wikis.map(wiki => JSON.stringify([wiki.id, wiki.layoutSource])).sort().join('|');
     if (!points || next !== signature) { signature = next; rebuild(nextData.wikis); } else paintSelection();
   } };
 }

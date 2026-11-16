@@ -2,7 +2,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { createGraph } from './graph.js';
 import { messageFormat } from './message-format.js';
-import { buildProvenance, scopedRunIds, flattenTree } from './provenance.js';
+import { buildProvenance, scopedRunIds, flattenTree, graphSources } from './provenance.js';
 import { createSourceTree } from './source-tree.js';
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -35,7 +35,7 @@ function revealSource(node, scroll = false) { sourceTree.reveal(node.runId, scro
 function renderGraph() {
   for (const node of [...state.contexts, ...state.wikis]) node.sessionLabel = sessionLabel({ session_key: node.sessionKey || node.context?.sessionKey });
   const ids = selectedSourceRunIds(), matchCount = state.wikis.filter(wiki => ids.has(wiki.runId)).length;
-  graph.update({ wikis: state.wikis }, state.selected, state.searchHits, state.scope ? ids : null);
+  graph.update({ wikis: graphSources(state.wikis, state.sessions, state.batches) }, state.selected, state.searchHits, state.scope ? ids : null);
   $('map-status').textContent = state.loading ? '加载中…' : state.error ? '读取失败' : state.scope ? `来源高亮：${state.scope.label || (state.scope.kind === 'batch' ? '所选批次' : '所选会话')}` : '全部记忆';
   $('map-status').title = $('map-status').textContent;
   $('sample-count').textContent = `${state.wikis.length} 篇 Wiki · ${state.batches.length} 个批次${state.scope ? ` · 来源选中 ${matchCount} 篇` : ''}${state.searchHits ? ` · 搜索命中 ${state.searchHits.size} 篇` : ''}${state.batchNext ? ' · 可继续载入' : ''}`;

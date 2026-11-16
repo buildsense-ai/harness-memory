@@ -17,6 +17,7 @@ it("serves the workbench shell and static assets without requiring a database co
     expect(page.body).toContain("id=\"all-sources\"");
     expect(page.body).not.toContain("id=\"graph-layout\"");
     expect(page.body).toContain("id=\"node-highlights\"");
+    expect(page.body).toContain("id=\"cluster-regions\"");
     expect(page.body).not.toContain("三维星簇");
     expect(page.body).not.toContain("星球排布");
     expect(page.body).toContain("id=\"locate-source\"");
