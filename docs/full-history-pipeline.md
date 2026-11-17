@@ -1,0 +1,68 @@
+# Historical ingestion and concurrent memory stages
+
+This change keeps the anchored Stage1 task-partition prompt, all public query/message input, disabled relations, direct Stage2 Markdown generation, schema retries and program-owned Episode references. It adds our own XiaoBa upload protocol, server Episode planning and persistent stage tasks. It does not build semantic edges.
+
+## Data flow
+
+```mermaid
+flowchart LR
+  A[Independent XiaoBa uploader] --> B[Immutable JSONL and verified ACK]
+  A --> C[Frozen per-session manifests]
+  B --> D[Complete runtime Episodes]
+  C --> D
+  D --> E[03:00 logical day and Stage1 budget]
+  E --> F[Concurrent Stage1 jobs]
+  F --> G[Persist task partition]
+  G --> H[Concurrent Stage2 Wiki jobs]
+  H --> I[Validate and publish with source_refs]
+```
+
+The uploader freezes all old file prefixes at first discovery; it does not use previous CatsLog or Monday upload markers. Future discovery is at Beijing 03:00 and 15:00. Transferred chunks are not model batches. A registered session manifest must have its advertised streams acknowledged before its snapshot is indexed; different sessions can process independently. For a single extremely large session scan, this first implementation waits for that session snapshot's transmission, rather than freezing a batch at arbitrary HTTP boundaries. This can delay its first Wiki; it does not enlarge its model requests.
+
+The receiver reassembles transcript runs across files and streams with their native conversation/run identity. It requires run_started/run_finished and an unbroken transcript sequence in that interval. Completed, failed and cancelled run endings are accepted. An idle file does not close a run. Pending inputs stay with their runtime Episode. Matching aggregate turn summaries are suppressed when transcript material exists. Legacy aggregate turns remain whole, with only the content they recorded; missing historical messages are not reconstructed. Unknown legacy dates remain unknown.
+
+Closed Episodes become eligible ten minutes after their ending. An Episode crossing 03:00 belongs wholly to its starting logical day. Daily Stage1 inputs target 200K tokens including prompt/schema overhead; packing preserves Episode order, with a two-batch rebalance for tails under 50K. At most two consecutive logical days merge when their combined Stage1 request is at most 100K. No semantic cut-point model or overlap is added. One Episode exceeding the soft target can run independently within the hard input budget.
+
+For each Stage1 task, the existing query assignment candidate logic selects material. Stage2 normally creates one Wiki. Only oversized candidates are packed between complete runtime Episodes into scoped document parts; one indivisible oversized Episode is deferred and visible. Part identities prevent later output overwriting earlier parts. A successful Wiki is immediately searchable even if another task fails.
+
+## Stage concurrency
+
+Persistent `extraction_runs` represent Stage1 and batch summaries; `memory_tasks` represent Stage2 document parts. Stage1 saves its result and tasks, releases its execution slot and immediately processes another batch. Stage2 tasks only run after the complete partition/task plan is published. Independent Stage1 calls, independent Stage2 calls and cross-batch Stage1/Stage2 calls overlap.
+
+Defaults: Stage1 maximum 2, Stage2 maximum 6, global in-flight stage jobs maximum 6. With both queues available, aim for 2 Stage1 + 4 Stage2; Stage2 can borrow all 6 when Stage1 is empty. Stage2 high-water backpressure limits further Stage1 admission. Each completed stage job replenishes capacity immediately. History/new lanes and authorized bot sources rotate within each stage. No extra per-bot model pool is multiplied onto these limits. Retries inside one schema call remain bounded by its occupied stage slot; they cannot exceed the global maximum.
+
+One coordinator holds an advisory lock. Restart recovers abandoned running stage tasks, reuses stored partitions and preserves successful documents. This is bounded asynchronous execution on one Node process, not a multi-host worker architecture. A database pool of 5 remains configurable by `DATABASE_POOL_MAX`; large candidates are only materialized for active work. Raise concurrency only after measuring host memory, database waits and provider limits. Remote LLM computation needs no local GPU.
+
+## Budgets and configuration
+
+Use the matching model's Hugging Face `tokenizer.json` via `MODEL_TOKENIZER_FILE`; the implementation counts bounded 64K-character slices and adds request framing allowance. Missing tokenizer uses UTF-8 bytes conservatively and reports that method in batch requests. It never assumes a fixed Chinese-character/token ratio. Validate the tokenizer against provider usage before increasing limits. Every dispatch and schema-feedback retry rechecks actual serialized messages/tools plus configured output and margin. Keep thinking enabled, effort max and output 131072.
+
+Default context 1048576, margin 37504, Stage1 target 200000, Stage2 target 880000. Targets are tunable and are not claims of an optimal quality point. The HTTP 4 MiB body limit remains; the obsolete normalized-input 4 MiB limit no longer determines new memory-model eligibility. Oversized/deferred work is recorded instead of repeatedly spending model tokens.
+
+## Protocol and inspection
+
+All routes require the existing project Bearer key. When `MEMORY_DATASET_ID` is configured, both raw uploads and manifests must include the matching `dataset_id`; old datasets receive 409. Stable source identity does not depend on the key text.
+
+`POST /v1/ingest/manifests`:
+
+```json
+{"dataset_id":"rebuild-v1","source_id":"bot-stable-id","manifest_id":"scan-id","session_key":"cli/cli_session.jsonl","lane":"backfill","files":[{"stream_id":"transport-id","end_offset":2048,"path":"sessions/cli/2026-11-17/cli_session.jsonl"}]}
+```
+
+Then use `/v1/ingest/batches` with the existing original-record protocol plus `dataset_id`. The response additionally includes SHA-256 of the concatenated submitted raw bytes. Replays at the same origin coordinates/hash reuse canonical raw/event references, including another transport stream; overlapping changed bytes are rejected. Byte ACK and manifest acceptance are not model completion.
+
+`GET /v1/ingest/status` reports manifest states, Episode states/reasons, run states, Stage2 task states and published Wiki count. `/v1/extractions/:id` additionally returns each task's part index/count/status/error and published document parts. Existing memory search remains deduplicated before the ten-document limit; Episode/raw reading preserves project authorization.
+
+## Clean rebuild
+
+Do not clear production during automated tests. Stop all old uploaders and the memory service, then run:
+
+```sh
+npm run admin -- dataset-clear PROJECT_ID --workers-stopped --confirm=PROJECT_ID
+```
+
+The command transactionally clears only that project's original memory data, pending jobs and Wiki products, retaining project keys. It refuses when the coordinator or planner lock is held. Set a new `MEMORY_DATASET_ID`, archive the independent uploader's old state, set matching `MONDAY_MEMORY_DATASET`, then start one new uploader and the service. Original bot logs and third-party state remain intact. Old dataset uploads must remain blocked; ordinary restarts must never perform a reset.
+
+## Requirements and review gates
+
+Verify full historical coverage plus incrementals; no dependency on CatsLog; immutable complete-line transfer and ACK recovery; complete runtime Episodes and all recorded messages; date/size packing and small-tail handling; Stage2-only oversize fallback; actual stage overlap and bounded concurrency; reuse successful results on retry/restart; project isolation, search and original citation reads; dataset-fenced clean rebuild. Record real-log input/output, model usage, retries, deferred items, task allocation and omissions separately from deterministic integration tests.

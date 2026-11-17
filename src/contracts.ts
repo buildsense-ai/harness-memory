@@ -58,6 +58,7 @@ export interface StoredEvent extends ProjectedEvent {
 }
 export interface IngestAck {
   next_offset: number;
+  sha256?: string;
   records: { offset: number; raw_ref: string; event_refs: string[] }[];
 }
 export type QueryRole =

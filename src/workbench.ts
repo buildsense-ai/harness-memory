@@ -299,8 +299,8 @@ export async function getWorkbenchGraph(
       input_event_count: refs.length,
       source_count: sources.length,
       sources,
-      sessions: (await pool.query(`select * from extraction_runs x cross join lateral (${runSessions}) session_data
-        where x.project_id=$1 and x.id=$2 order by session_key`, [project, runId])).rows,
+      sessions: (await pool.query(`select session_data.* from extraction_runs x cross join lateral (${runSessions}) session_data
+        where x.project_id=$1 and x.id=$2 order by session_data.session_key`, [project, runId])).rows,
       partition_ready: Boolean(partition),
     },
     tasks: items.map((thread: any) => ({

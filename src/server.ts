@@ -13,6 +13,12 @@ const app = await buildApp({
   budget: Number(process.env.MODEL_INPUT_BUDGET ?? 65536),
   memoryBudget: Number(process.env.MEMORY_INPUT_BUDGET ?? 4194304),
   memoryRunConcurrency: Number(process.env.MEMORY_RUN_CONCURRENCY ?? 2),
+  pipeline: {
+    stage1: Number(process.env.MEMORY_STAGE1_CONCURRENCY ?? 2),
+    stage2: Number(process.env.MEMORY_STAGE2_CONCURRENCY ?? 6),
+    total: Number(process.env.MEMORY_MODEL_CONCURRENCY ?? 6),
+    highWater: Number(process.env.MEMORY_STAGE2_HIGH_WATER ?? 1000),
+  },
 });
 await app.listen({
   host: process.env.HOST ?? "127.0.0.1",

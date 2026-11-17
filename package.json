@@ -17,6 +17,7 @@
     "pretest": "npm run build:workbench"
   },
   "dependencies": {
+    "@huggingface/tokenizers": "^0.2.0",
     "ajv": "^8.20.0",
     "d3-force-3d": "^3.0.6",
     "dompurify": "^3.4.17",
