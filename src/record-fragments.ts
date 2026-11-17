@@ -27,21 +27,25 @@ export async function ingestFragment(pool: Pool, project: string, value: unknown
       await c.query('commit');
       return { next_fragment_offset: total, next_offset: offset + total, sha256: hash };
     }
-    const parts = (await c.query<{ fragment_offset: string; total_bytes: string; record_hash: string; origin: unknown; raw: Buffer }>('select * from ingest_fragments where project_id=$1 and source_id=$2 and stream_id=$3 and record_offset=$4 order by fragment_offset', coordinates)).rows;
+    const parts = (await c.query<{ fragment_offset: string; total_bytes: string; record_hash: string; origin: unknown; size: number }>('select fragment_offset,total_bytes,record_hash,origin,octet_length(raw) size from ingest_fragments where project_id=$1 and source_id=$2 and stream_id=$3 and record_offset=$4 order by fragment_offset', coordinates)).rows;
     let next = 0;
     for (const part of parts) {
       assert(Number(part.total_bytes) === total && part.record_hash === hash && isDeepStrictEqual(part.origin, origin), 'fragment identity conflict', 409);
-      assert(Number(part.fragment_offset) === next, 'stored fragment gap', 409); next += part.raw.length;
+      assert(Number(part.fragment_offset) === next, 'stored fragment gap', 409); next += part.size;
     }
     const existing = parts.find(p => Number(p.fragment_offset) === fragment);
-    if (existing) assert(existing.raw.equals(bytes), 'fragment content conflict', 409);
+    if (existing) {
+      const saved = (await c.query<{ raw: Buffer }>('select raw from ingest_fragments where project_id=$1 and source_id=$2 and stream_id=$3 and record_offset=$4 and fragment_offset=$5', [...coordinates, fragment])).rows[0];
+      assert(saved.raw.equals(bytes), 'fragment content conflict', 409);
+    }
     else {
       assert(fragment === next, 'fragment offset conflict', 409);
       await c.query('insert into ingest_fragments(project_id,source_id,stream_id,record_offset,fragment_offset,total_bytes,record_hash,origin,raw) values($1,$2,$3,$4,$5,$6,$7,$8,$9)', [...coordinates, fragment, total, hash, JSON.stringify(origin), bytes]);
-      parts.push({ fragment_offset: String(fragment), total_bytes: String(total), record_hash: hash, origin, raw: bytes }); next += bytes.length;
+      next += bytes.length;
     }
     if (next === total) {
-      record = Buffer.concat(parts.map(p => p.raw));
+      const stored = (await c.query<{ raw: Buffer }>('select raw from ingest_fragments where project_id=$1 and source_id=$2 and stream_id=$3 and record_offset=$4 order by fragment_offset', coordinates)).rows;
+      record = Buffer.concat(stored.map(p => p.raw));
       assert(sha256(record) === hash && record.at(-1) === 10, 'whole record hash/newline mismatch', 409);
     }
     await c.query('commit');

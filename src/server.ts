@@ -11,8 +11,6 @@ const app = await buildApp({
   pool,
   model: configuredModel(),
   budget: Number(process.env.MODEL_INPUT_BUDGET ?? 65536),
-  memoryBudget: Number(process.env.MEMORY_INPUT_BUDGET ?? 4194304),
-  memoryRunConcurrency: Number(process.env.MEMORY_RUN_CONCURRENCY ?? 2),
   pipeline: {
     stage1: Number(process.env.MEMORY_STAGE1_CONCURRENCY ?? 2),
     stage2: Number(process.env.MEMORY_STAGE2_CONCURRENCY ?? 6),

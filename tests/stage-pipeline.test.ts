@@ -4,7 +4,8 @@ import { migrate } from '../src/db/migrate.js';
 import { createProject } from '../src/db/projects.js';
 import { buildApp } from '../src/app.js';
 import { ingestBatch } from '../src/ingest.js';
-import { registerManifest, IngestionPlanner } from '../src/ingestion-planner.js';
+import { IngestionPlanner } from '../src/ingestion-planner.js';
+import { registerManifest } from '../src/ingestion/manifests.js';
 import { MemoryRunner } from '../src/extraction/memory-runner.js';
 import type { ChatModel } from '../src/extraction/model.js';
 import type { StoredEvent } from '../src/contracts.js';
@@ -35,7 +36,7 @@ it('stores partial and cross-file runs, later processes one complete Episode wit
   const p=await createProject(pool,'cross-file-planner');
   const seen:StoredEvent[][]=[];const m={...model,memory:async(_t:unknown,_a:unknown,events:StoredEvent[])=>{if(events.some(e=>e.text==='记录cross'))seen.push(events);return{markdown:'# 原文记录\n\n完整记录。'};}};
   const runner=new MemoryRunner(pool,m);const planner=new IngestionPlanner(pool,runner,m);
-  const rows=runRows('cross'), first=records(rows.slice(0,5)), second=records(rows.slice(5),0,'sessions/cli/2026-11-17/cli_test.jsonl');
+  const rows=runRows('cross'), first=records([{entry_type:'runtime',timestamp:'2026-11-16T18:49:00Z',message:'运行状态，不参与语义组批'},...rows.slice(0,5)]), second=records(rows.slice(5),0,'sessions/cli/2026-11-17/cli_test.jsonl');
   try{
     await registerManifest(pool,p.project_id,{source_id:'bot',manifest_id:'first',session_key:'cli/cli_test.jsonl',lane:'backfill',files:[{stream_id:'s1',end_offset:first.reduce((n,r)=>n+Buffer.from(r.raw_base64,'base64').length,0),path:first[0].origin.path}]});
     await ingestBatch(pool,p.project_id,{source_id:'bot',stream_id:'s1',harness:'xiaoba',records:first});await planner.plan();
@@ -46,6 +47,7 @@ it('stores partial and cross-file runs, later processes one complete Episode wit
     await vi.waitFor(async()=>{expect((await pool.query('select status from extraction_runs where project_id=$1',[p.project_id])).rows[0].status).toBe('completed');},{timeout:7000});
     expect(seen).toHaveLength(1);expect(seen[0].filter(e=>e.kind==='query')).toHaveLength(2);
     expect(seen[0].map(e=>e.kind)).toEqual(['query','query','message','tool_call','tool_result','message']);
+    expect((await pool.query('select count(*)::int n from raw_records where project_id=$1',[p.project_id])).rows[0].n).toBe(9);
     expect((await pool.query('select logical_day from ingestion_episodes where project_id=$1',[p.project_id])).rows[0].logical_day).toBe('2026-11-16');
     await planner.plan();expect((await pool.query('select count(*)::int n from extraction_runs where project_id=$1',[p.project_id])).rows[0].n).toBe(1);
   }finally{await runner.close();}
@@ -79,7 +81,7 @@ it('rebuilds an unpublished partial plan and splits the exact scoped Stage2 payl
     inputTokens:(stage,e,t)=>stage==='stage1'?10:e.filter(x=>x.kind==='query').length*40+(t?.boundary_note.includes('本次仅含')?25:0),
     memory:async(_t,_a,e)=>{calls.push(e);return{markdown:'# 分段记录\n\n本段的实际内容。'};}};
   const budget:RequestBudget={count:s=>s.length,context:10000,output:100,margin:100,stage1:1000,stage2:100,method:'test-exact'};
-  const runner=new MemoryRunner(pool,m,4194304,2,undefined,budget);
+  const runner=new MemoryRunner(pool,m,undefined,budget);
   try{
     const rec=records([0,1,2].map(i=>({entry_type:'turn',user:{text:'恢复任务'+i},assistant:{text:'结果'+i,tool_calls:[]}})),0,'sessions/cli/2026-11-16/cli_recover.jsonl');
     const ack=await ingestBatch(pool,p.project_id,{source_id:'recover',stream_id:'s',harness:'xiaoba',records:rec});
@@ -144,3 +146,64 @@ it('rotates past one hundred blocked sessions so later complete sessions are sti
     await pool.query("update ingestion_episodes set status='awaiting_material' where project_id=$1 and status='ready'",[p.project_id]);
   }
 },60000);
+
+
+it('keeps indexed Episodes durable when batch publication fails and retries without duplicate work', async () => {
+  const project = await createProject(pool, 'planner-publication-recovery');
+  const runner = new MemoryRunner(pool, model);
+  const planner = new IngestionPlanner(pool, runner, model);
+  const raw = records(runRows('publication'));
+  const end = raw.reduce((n, r) => n + Buffer.from(r.raw_base64, 'base64').length, 0);
+  await registerManifest(pool, project.project_id, {
+    source_id: 'bot', manifest_id: 'one', session_key: 'cli/cli_test.jsonl', lane: 'backfill',
+    files: [{ stream_id: 'one', end_offset: end, path: raw[0].origin.path }],
+  });
+  await ingestBatch(pool, project.project_id, { source_id: 'bot', stream_id: 'one', harness: 'xiaoba', records: raw });
+  const enqueue = vi.spyOn(runner, 'enqueueEvents').mockRejectedValueOnce(new Error('publication interrupted'));
+  try {
+    await expect(planner.plan()).rejects.toThrow('publication interrupted');
+    expect((await pool.query('select status from ingestion_manifests where project_id=$1', [project.project_id])).rows[0].status).toBe('indexed');
+    expect((await pool.query('select status,run_id from ingestion_episodes where project_id=$1', [project.project_id])).rows[0]).toMatchObject({ status: 'ready', run_id: null });
+    expect((await pool.query('select count(*)::int n from extraction_runs where project_id=$1', [project.project_id])).rows[0].n).toBe(0);
+    enqueue.mockRestore();
+    await planner.plan();
+    await planner.plan();
+    expect((await pool.query('select count(*)::int n from extraction_runs where project_id=$1', [project.project_id])).rows[0].n).toBe(1);
+    expect((await pool.query('select status from ingestion_episodes where project_id=$1', [project.project_id])).rows[0].status).toBe('queued');
+    await runner.initialize();
+    await vi.waitFor(async () => expect((await pool.query('select status from extraction_runs where project_id=$1', [project.project_id])).rows[0].status).toBe('completed'), { timeout: 7000 });
+  } finally {
+    enqueue.mockRestore();
+    await runner.close();
+  }
+});
+
+it('revisits an unfinished native run when a runless transcript receipt fills its sequence gap', async () => {
+  const project = await createProject(pool, 'runless-sequence-gap');
+  const runner = new MemoryRunner(pool, model);
+  const planner = new IngestionPlanner(pool, runner, model);
+  const rows = runRows('gap');
+  const first = records(rows.filter((_, i) => i !== 3));
+  const end = first.reduce((n, r) => n + Buffer.from(r.raw_base64, 'base64').length, 0);
+  const base = rows[3];
+  const second = records([{ ...base, run_id: undefined, event: { type: 'input_received', input_id: 'next', text: 'pending receipt' } }], end);
+  const manifest = (id: string, offset: number) => ({
+    source_id: 'bot', manifest_id: id, session_key: 'cli/cli_test.jsonl', lane: 'incremental',
+    files: [{ stream_id: 'one', end_offset: offset, path: first[0].origin.path }],
+  });
+  try {
+    await registerManifest(pool, project.project_id, manifest('first', end));
+    await ingestBatch(pool, project.project_id, { source_id: 'bot', stream_id: 'one', harness: 'xiaoba', records: first });
+    await planner.plan();
+    expect((await pool.query('select status,error from ingestion_episodes where project_id=$1', [project.project_id])).rows[0]).toMatchObject({ status: 'awaiting_material', error: 'awaiting_sequence_gap' });
+    await registerManifest(pool, project.project_id, manifest('second', end + Buffer.from(second[0].raw_base64, 'base64').length));
+    await ingestBatch(pool, project.project_id, { source_id: 'bot', stream_id: 'one', harness: 'xiaoba', records: second });
+    await planner.plan();
+    expect((await pool.query('select status,error from ingestion_episodes where project_id=$1', [project.project_id])).rows[0]).toMatchObject({ status: 'queued', error: null });
+    expect((await pool.query('select count(*)::int n from extraction_runs where project_id=$1', [project.project_id])).rows[0].n).toBe(1);
+    await runner.initialize();
+    await vi.waitFor(async () => expect((await pool.query('select status from extraction_runs where project_id=$1', [project.project_id])).rows[0].status).toBe('completed'), { timeout: 7000 });
+  } finally {
+    await runner.close();
+  }
+});

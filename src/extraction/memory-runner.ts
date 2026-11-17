@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import { assert, ref, sha256, type StoredEvent, type TaskPartition, type TaskThread, type QueryAssignment } from '../contracts.js';
-import { eventFromRow, eventSelect } from '../read.js';
+import { eventFromRow, eventSelect, eventDescriptorSelect } from '../read.js';
 import { snapshotEvents, type ExtractionRequest } from './snapshot.js';
 import { validatePartition, type ChatModel } from './model.js';
 import { validateMemoryDocument } from './memory-output.js';
@@ -27,8 +27,8 @@ export class MemoryRunner {
   private cursor = new Map<string, string>();
   private readonly config: PipelineConfig;
   private readonly tokens: RequestBudget;
-  constructor(private pool: Pool, private model: ChatModel | undefined, _legacyByteBudget = 4194304, stage1 = 2, config?: Partial<PipelineConfig>, tokens?: RequestBudget) {
-    this.config = { stage1, stage2: 6, total: 6, highWater: 1000, ...config };
+  constructor(private pool: Pool, private model: ChatModel | undefined, config?: Partial<PipelineConfig>, tokens?: RequestBudget) {
+    this.config = { stage1: 2, stage2: 6, total: 6, highWater: 1000, ...config };
     this.tokens = tokens ?? configuredBudget();
     assert(Object.values(this.config).every(n => Number.isSafeInteger(n) && n > 0), 'invalid pipeline concurrency');
     assert(this.config.stage1 <= this.config.total && this.config.stage2 <= this.config.total && this.config.total <= 64, 'invalid global concurrency');
@@ -141,7 +141,7 @@ export class MemoryRunner {
       validatePartition(partition, dialogue); assert(partition.relations.length === 0, 'relations disabled');
       await this.pool.query('update extraction_runs set task_partition=$2 where id=$1', [run.id, JSON.stringify(partition)]);
       // Descriptors avoid materializing every tool result before selecting a task.
-      const descriptors = (await this.pool.query(eventSelect.replace('e.*', "e.id,e.raw_id,e.ordinal,e.kind,e.pointer,'null' content_json,'' search_text,e.metadata") + ' where e.project_id=$1 and e.id=any($2::text[])', [run.project_id, run.input_refs])).rows;
+      const descriptors = (await this.pool.query(eventDescriptorSelect + ' where e.project_id=$1 and e.id=any($2::text[])', [run.project_id, run.input_refs])).rows;
       const byId = new Map(descriptors.map(r => [r.id, eventFromRow(r)]));
       const skeleton = run.input_refs.map(id => { const e = byId.get(id); assert(e, 'snapshot event missing'); return e; });
       const plans: TaskPlan[] = [];

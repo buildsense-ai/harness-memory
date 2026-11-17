@@ -1,6 +1,7 @@
 import { searchMemories } from "./memories.js";
 import { MemoryRunner } from "./extraction/memory-runner.js";
-import { IngestionPlanner, registerManifest } from './ingestion-planner.js';
+import { IngestionPlanner } from './ingestion-planner.js';
+import { registerManifest } from './ingestion/manifests.js';
 import { isObject } from './extraction/output.js';
 import { ingestFragment } from './record-fragments.js';
 import type { PipelineConfig } from './extraction/memory-runner.js';
@@ -27,15 +28,11 @@ export async function buildApp({
   pool,
   model,
   budget = 65536,
-  memoryBudget = 4 * 1024 * 1024,
-  memoryRunConcurrency = 2,
   pipeline,
 }: {
   pool: Pool;
   model?: ChatModel;
   budget?: number;
-  memoryBudget?: number;
-  memoryRunConcurrency?: number;
   pipeline?: Partial<PipelineConfig>;
 }) {
   const app = Fastify({ bodyLimit: 4 * 1024 * 1024, logger: false });
@@ -44,7 +41,7 @@ export async function buildApp({
   app.get("/workbench-overrides.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(WORKBENCH_OVERRIDES_CSS));
   app.get("/workbench.js", async (_request, reply) => reply.type("text/javascript; charset=utf-8").send(WORKBENCH_JS));
   const runner = new ExtractionRunner(pool, model, budget);
-  const memory = new MemoryRunner(pool, model, memoryBudget, memoryRunConcurrency, pipeline);
+  const memory = new MemoryRunner(pool, model, pipeline);
   const planner = new IngestionPlanner(pool, memory, model);
   app.addHook("onReady", async () => { await memory.initialize(); planner.start(); });
   app.addHook("onClose", async () => { await planner.close(); await memory.close(); await runner.wait(); });

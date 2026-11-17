@@ -20,6 +20,9 @@ export function eventFromRow(r: any): StoredEvent {
 }
 export const eventSelect =
   "select e.*,r.offset_bytes,r.metadata raw_metadata from events e join raw_records r on r.id=e.raw_id and r.project_id=e.project_id";
+/** Candidate routing needs identity and ordering, never tool payload text. */
+export const eventDescriptorSelect =
+  "select e.id,e.raw_id,e.ordinal,e.kind,e.pointer,'null' content_json,'' search_text,e.metadata,r.offset_bytes,r.metadata raw_metadata from events e join raw_records r on r.id=e.raw_id and r.project_id=e.project_id";
 export async function readRaw(pool: Pool, p: string, id: string) {
   const r = (
     await pool.query(
