@@ -45,7 +45,9 @@ Default context 1048576, margin 37504, Stage1 target 200000, Stage2 target 88000
 
 ## Protocol and inspection
 
-All routes require the existing project Bearer key. When `MEMORY_DATASET_ID` is configured, both raw uploads and manifests must include the matching `dataset_id`; old datasets receive 409. Stable source identity does not depend on the key text.
+Project routes require the existing Bearer key. The separate Bot upload ingress is keyless: `/v1/bot-ingest/config` supplies the dataset identifier, and `/v1/bots/{uid}/ingest/{manifests,batches,fragments}` accepts original logs by Bot UID. UID is declared provenance, not caller authentication. Upload callers do not choose a project; `MEMORY_BOT_PROJECT_ID` selects the server-owned workspace (default `prj_bot_uploads`, created automatically). Search, workbench, extraction inspection/retry and original-source reads retain project authorization. Dataset fencing applies to Bot uploads as well as the project upload routes. Stable source identity does not depend on key text.
+
+Bot uploads normalize `usr365` to UID `365`, namespace each installation source under that UID and update the `ingestion_bots` display name on each request carrying a name. Records with a conflicting explicit Bot identity are rejected atomically. Original JSONL bytes stay intact; normalized metadata records the Bot UID and whether its attribution was recorded or upload-declared. The workbench resolves names from the Bot registry, so a rename updates existing views without rewriting raw records. The adapter, Episode planner, stage queues, Markdown generation and source references are shared with project uploads.
 
 `POST /v1/ingest/manifests`:
 
@@ -69,7 +71,7 @@ Do not clear production during automated tests. Stop all old uploaders and the m
 npm run admin -- dataset-clear PROJECT_ID --workers-stopped --confirm=PROJECT_ID
 ```
 
-The command transactionally clears only that project's original memory data, pending jobs and Wiki products, retaining project keys. It refuses when the coordinator or planner lock is held. Set a new `MEMORY_DATASET_ID`, archive the independent uploader's old state, set matching `MONDAY_MEMORY_DATASET`, then start one new uploader and the service. Original bot logs and third-party state remain intact. Old dataset uploads must remain blocked; ordinary restarts must never perform a reset.
+The command transactionally clears only that project's original memory data, pending jobs and Wiki products, retaining project keys. It refuses when the coordinator or planner lock is held. Set a new `MEMORY_DATASET_ID`, archive the independent uploader's old state, then start one new uploader and the service. Bot uploaders discover the new dataset automatically from the server. Original bot logs and third-party state remain intact. Old dataset uploads must remain blocked; ordinary restarts must never perform a reset.
 
 ## Requirements and review gates
 

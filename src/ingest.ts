@@ -9,11 +9,13 @@ import {
 } from "./contracts.js";
 import { projectRecord } from "./adapters/index.js";
 import { workbenchMetadata } from "./workbench-metadata.js";
+import { botUid, type UploadBot } from './ingestion/bot-identity.js';
 export async function ingestBatch(
   pool: Pool,
   projectId: string,
   b: UploadBatch,
   uploadKeyId?: string,
+  bot?: UploadBot,
 ): Promise<IngestAck> {
   assert(
     b &&
@@ -85,6 +87,8 @@ export async function ingestBatch(
       }
       const p = projectRecord(b.harness, raw),
         expected = p.events.map(({ content, text, fidelity, ...d }) => d);
+      const display = workbenchMetadata(raw, p);
+      if (bot && display.bot_id) assert(botUid(display.bot_id) === bot.uid, 'record belongs to another bot', 409);
       if (r.events !== undefined)
         assert(
           Array.isArray(r.events) && isDeepStrictEqual(expected, r.events),
@@ -140,7 +144,8 @@ export async function ingestBatch(
               transcript_sequence: p.transcript_sequence,
               session_id: p.session_id,
               run_id: p.run_id,
-              ...workbenchMetadata(raw, p),
+              ...display,
+              ...(bot ? { bot_id: bot.uid, bot_name: bot.name ?? display.bot_name, bot_identity_source: display.bot_id ? 'recorded' : 'upload_declared' } : {}),
               ...(r.origin ? { origin: r.origin } : {}),
             }),
             uploadKeyId ?? null,

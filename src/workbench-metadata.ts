@@ -33,7 +33,12 @@ export interface WorkbenchCatalog {
   bots: Record<string, { name: string; sessions: Record<string, string> }>;
 }
 export async function workbenchCatalog(pool: Pool, project: string): Promise<WorkbenchCatalog> {
-  return (await pool.query('select data from workbench_catalog where project_id=$1', [project])).rows[0]?.data ?? { bots: {} };
+  const catalog: WorkbenchCatalog = (await pool.query('select data from workbench_catalog where project_id=$1', [project])).rows[0]?.data ?? { bots: {} };
+  const bots = (await pool.query<{ bot_uid: string; name: string }>('select bot_uid,name from ingestion_bots where project_id=$1 and name is not null', [project])).rows;
+  for (const bot of bots) {
+    catalog.bots[bot.bot_uid] = { name: bot.name, sessions: catalog.bots[bot.bot_uid]?.sessions ?? {} };
+  }
+  return catalog;
 }
 
 export function sessionDisplay(catalog: WorkbenchCatalog, session: { bot_id?: string; session_id?: string; bot_name?: string; session_name?: string }) {

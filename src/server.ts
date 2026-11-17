@@ -10,6 +10,7 @@ await pool.query(
 const app = await buildApp({
   pool,
   model: configuredModel(),
+  botUploadProject: process.env.MEMORY_BOT_PROJECT_ID,
   budget: Number(process.env.MODEL_INPUT_BUDGET ?? 65536),
   pipeline: {
     stage1: Number(process.env.MEMORY_STAGE1_CONCURRENCY ?? 2),

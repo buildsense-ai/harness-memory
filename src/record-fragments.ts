@@ -3,9 +3,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { assert, sha256 } from './contracts.js';
 import { isObject } from './extraction/output.js';
 import { ingestBatch } from './ingest.js';
+import type { UploadBot } from './ingestion/bot-identity.js';
 
 /** Transport-only fragments. A record is normalized only after exact whole-record verification. */
-export async function ingestFragment(pool: Pool, project: string, value: unknown, key?: string) {
+export async function ingestFragment(pool: Pool, project: string, value: unknown, key?: string, bot?: UploadBot) {
   assert(isObject(value), 'invalid fragment');
   const { source_id: source, stream_id: stream, record_offset: offset, fragment_offset: fragment, total_bytes: total, record_hash: hash, origin } = value;
   assert(typeof source === 'string' && source.length > 0 && source.length <= 256 && typeof stream === 'string' && stream.length > 0 && stream.length <= 256, 'invalid source/stream');
@@ -51,7 +52,7 @@ export async function ingestFragment(pool: Pool, project: string, value: unknown
     await c.query('commit');
     if (!record) return { next_fragment_offset: next };
   } catch (e) { await c.query('rollback'); throw e; } finally { c.release(); }
-  const ack = await ingestBatch(pool, project, { source_id: source, stream_id: stream, harness: 'xiaoba', records: [{ offset, raw_base64: record.toString('base64'), origin: { path: origin.path, offset: origin.offset } }] }, key);
+  const ack = await ingestBatch(pool, project, { source_id: source, stream_id: stream, harness: 'xiaoba', records: [{ offset, raw_base64: record.toString('base64'), origin: { path: origin.path, offset: origin.offset } }] }, key, bot);
   await pool.query('delete from ingest_fragments where project_id=$1 and source_id=$2 and stream_id=$3 and record_offset=$4', coordinates);
   return { next_fragment_offset: total, next_offset: ack.next_offset, sha256: hash };
 }
