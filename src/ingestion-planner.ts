@@ -44,6 +44,7 @@ export class IngestionPlanner {
   private timer?: ReturnType<typeof setInterval>;
   private active?: Promise<void>;
   private stopped = false;
+  private sourceCursor = ['', '', '', ''];
   constructor(private pool: Pool, private runner: MemoryRunner, private model?: ChatModel, private budget: RequestBudget = configuredBudget(), private idleMs = 600000) {}
   start() { this.timer = setInterval(() => this.kick(), 2000); this.timer.unref(); this.kick(); }
   private kick() {
@@ -56,12 +57,13 @@ export class IngestionPlanner {
     try {
       await c.query('begin');
       if (!(await c.query('select pg_try_advisory_xact_lock(846018) locked')).rows[0].locked) { await c.query('rollback'); return; }
-      const pending = (await c.query<Manifest & { project_id: string }>(`select m.* from ingestion_manifests m where m.status='waiting' and not exists(
-        select 1 from jsonb_array_elements(m.files) f where not exists(select 1 from streams s where s.project_id=m.project_id and s.source_id=m.source_id and s.stream_id=f->>'stream_id' and s.next_offset >= (f->>'end_offset')::bigint)
-      ) order by m.created_at,m.manifest_id limit 100`)).rows;
+      const pending = (await c.query<Manifest & { project_id: string }>(`select m.* from ingestion_manifests m where m.status='waiting' and (m.indexed_offsets is null or exists(
+        select 1 from jsonb_array_elements(m.files) f left join streams s on s.project_id=m.project_id and s.source_id=m.source_id and s.stream_id=f->>'stream_id'
+        where least(coalesce(s.next_offset,0),(f->>'end_offset')::bigint) <> coalesce((m.indexed_offsets->>(f->>'stream_id'))::bigint,0)
+      )) order by m.created_at,m.manifest_id limit 100`)).rows;
       for (const manifest of pending) {
         const streams = (await c.query<{ stream_id: string; next_offset: string }>('select stream_id,next_offset from streams where project_id=$1 and source_id=$2 and stream_id=any($3::text[])', [manifest.project_id, manifest.source_id, manifest.files.map(f => f.stream_id)])).rows;
-        if (!manifest.files.every(f => streams.some(s => s.stream_id === f.stream_id && Number(s.next_offset) >= f.end_offset))) continue;
+        const complete = manifest.files.every(f => streams.some(s => s.stream_id === f.stream_id && Number(s.next_offset) >= f.end_offset));
         const [type, filename] = manifest.session_key.split('/');
         const records = (await c.query<RawRow>("select id,stream_id,offset_bytes,metadata from raw_records where project_id=$1 and source_id=$2 and split_part(metadata->'origin'->>'path','/',2)=$3 and split_part(metadata->'origin'->>'path','/',4)=$4 order by metadata->'origin'->>'path',(metadata->'origin'->>'offset')::bigint", [manifest.project_id, manifest.source_id, type, filename])).rows;
         const groups = new Map<string, RawRow[]>(), transcript = new Set<string>();
@@ -97,16 +99,29 @@ export class IngestionPlanner {
           const status = error ? 'awaiting_material' : 'ready';
           await c.query("insert into ingestion_episodes(project_id,source_id,episode_key,session_key,lane,logical_day,started_at,ended_at,raw_ids,status,error) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) on conflict(project_id,source_id,episode_key) do update set raw_ids=excluded.raw_ids,ended_at=excluded.ended_at,status=excluded.status,error=excluded.error where ingestion_episodes.run_id is null and ingestion_episodes.status<>'deferred_oversize'", [manifest.project_id, manifest.source_id, key, manifest.session_key, manifest.lane, logicalDay(start), start, ended, JSON.stringify(group.map(r => r.id)), status, error]);
         }
-        await c.query("update ingestion_manifests set status='indexed' where project_id=$1 and source_id=$2 and manifest_id=$3", [manifest.project_id, manifest.source_id, manifest.manifest_id]);
+        const offsets = Object.fromEntries(manifest.files.map(f => [f.stream_id, Math.min(f.end_offset, Number(streams.find(s => s.stream_id === f.stream_id)?.next_offset ?? 0))]));
+        await c.query("update ingestion_manifests set status=$4,indexed_offsets=$5 where project_id=$1 and source_id=$2 and manifest_id=$3", [manifest.project_id, manifest.source_id, manifest.manifest_id, complete ? 'indexed' : 'waiting', JSON.stringify(offsets)]);
       }
       if (this.model?.memory) {
-        const sources = (await c.query<{ project_id: string; source_id: string; session_key: string; lane: string }>("select distinct project_id,source_id,session_key,lane from ingestion_episodes where status='ready' and ended_at<=$1 order by project_id,source_id,session_key limit 100", [new Date(now - this.idleMs)])).rows;
+        const sources = (await c.query<{ project_id: string; source_id: string; session_key: string; lane: string }>(`with candidates as (select distinct project_id,source_id,session_key,lane from ingestion_episodes where status='ready' and ended_at<=$1)
+          select * from candidates order by (project_id,source_id,session_key,lane)<=($2,$3,$4,$5),project_id,source_id,session_key,lane limit 100`, [new Date(now - this.idleMs),...this.sourceCursor])).rows;
         for (const s of sources) {
-          // Do not freeze partial historical ranges while a session manifest is still arriving.
-          if ((await c.query("select 1 from ingestion_manifests where project_id=$1 and source_id=$2 and session_key=$3 and lane=$4 and status='waiting' limit 1", [s.project_id, s.source_id, s.session_key, s.lane])).rowCount) continue;
+          this.sourceCursor = [s.project_id,s.source_id,s.session_key,s.lane];
+          const incomplete = (await c.query<{ path: string }>(`select distinct f->>'path' path from ingestion_manifests m cross join jsonb_array_elements(m.files) f
+            where m.project_id=$1 and m.source_id=$2 and m.session_key=$3 and m.lane=$4 and m.status='waiting' and not exists(
+              select 1 from streams st where st.project_id=m.project_id and st.source_id=m.source_id and st.stream_id=f->>'stream_id' and st.next_offset >= (f->>'end_offset')::bigint)`, [s.project_id, s.source_id, s.session_key,s.lane])).rows;
+          const watermarks = new Map<string, string>();
+          for (const file of incomplete) {
+            const last = (await c.query<{ timestamp: string }>("select metadata->>'timestamp' timestamp from raw_records where project_id=$1 and source_id=$2 and metadata->'origin'->>'path'=$3 order by (metadata->'origin'->>'offset')::bigint desc limit 1", [s.project_id, s.source_id, file.path])).rows[0];
+            watermarks.set(file.path, logicalDay(last?.timestamp));
+          }
           const episodes = (await c.query<EpisodeRow>("select episode_key,raw_ids,logical_day,started_at from ingestion_episodes where project_id=$1 and source_id=$2 and session_key=$3 and lane=$4 and status='ready' and ended_at<=$5 order by logical_day,started_at,episode_key", [s.project_id, s.source_id, s.session_key, s.lane, new Date(now - this.idleMs)])).rows;
           const units: { ep: EpisodeRow; events: StoredEvent[]; refs: string[]; cost: number }[] = [];
           for (const ep of episodes) {
+            // A blocked file holds only its unfinished logical-day tail. Other complete
+            // files and earlier closed days continue; later arrivals form supplemental batches.
+            const origins = (await c.query<{ path: string }>("select distinct metadata->'origin'->>'path' path from raw_records where project_id=$1 and id=any($2::text[])", [s.project_id, ep.raw_ids])).rows;
+            if (origins.some(({ path }) => watermarks.has(path) && (ep.logical_day === 'unknown_date' || watermarks.get(path) === 'unknown_date' || watermarks.get(path)! <= ep.logical_day))) continue;
             const refs = (await c.query<{ id: string }>('select id from events where project_id=$1 and raw_id=any($2::text[]) order by array_position($2::text[],raw_id),ordinal', [s.project_id, ep.raw_ids])).rows.map(r => r.id);
             const rows = (await c.query(eventSelect + " where e.project_id=$1 and e.raw_id=any($2::text[]) and e.kind in ('query','message') order by array_position($2::text[],e.raw_id),e.ordinal", [s.project_id, ep.raw_ids])).rows;
             const dialogue = rows.map(eventFromRow);

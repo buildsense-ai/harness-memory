@@ -19,7 +19,7 @@ try {
       assert((await c.query('select pg_try_advisory_xact_lock(846017) locked')).rows[0].locked, 'memory worker is still running');
       assert((await c.query('select pg_try_advisory_xact_lock(846018) locked')).rows[0].locked, 'ingestion planner is still running');
       assert((await c.query('select 1 from projects where id=$1', [name])).rowCount, 'unknown project');
-      for (const table of ['episode_events','memory_documents','memory_tasks','episodes','ingestion_episodes','ingestion_manifests','extraction_runs','events','ingest_receipts','raw_records','streams']) await c.query(`delete from ${table} where project_id=$1`, [name]);
+      for (const table of ['episode_events','memory_documents','memory_tasks','episodes','ingestion_episodes','ingestion_manifests','extraction_runs','events','ingest_fragments','ingest_receipts','raw_records','streams']) await c.query(`delete from ${table} where project_id=$1`, [name]);
       await c.query('commit');
       console.log(JSON.stringify({ project_id: name, status: 'cleared', retained: ['project', 'api keys', 'bot source logs'], next: 'Set a new MEMORY_DATASET_ID on the server and MONDAY_MEMORY_DATASET on uploader; archive local monday-memory-state.json before enabling the new uploader.' }));
     } catch (error) { await c.query('rollback'); throw error; } finally { c.release(); }

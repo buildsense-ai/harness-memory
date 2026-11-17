@@ -8,8 +8,10 @@ import { registerManifest, IngestionPlanner } from '../src/ingestion-planner.js'
 import { MemoryRunner } from '../src/extraction/memory-runner.js';
 import type { ChatModel } from '../src/extraction/model.js';
 import type { StoredEvent } from '../src/contracts.js';
+import type { RequestBudget } from '../src/extraction/budget.js';
 
 const pool = new Pool({connectionString:process.env.TEST_DATABASE_URL,max:8});
+vi.setConfig({testTimeout:60000,hookTimeout:60000});
 beforeAll(()=>migrate(pool));afterAll(()=>pool.end());
 const thread={thread_id:'T1',title:'记录本批工作',desired_outcome:'记录执行与结果',include_topics:[],exclude_topics:[],boundary_note:'本次候选'};
 const model: ChatModel={partition:async events=>({task_threads:[thread],query_assignments:events.filter(e=>e.kind==='query').map(e=>({query_ref:e.ref,thread_ids:['T1'],role:'origin'})),relations:[]}),memory:async()=>({markdown:'# 本批工作\n\n## 背景\n原文中的任务。\n\n## 发生了什么\n实际执行内容。'}),select:async()=>{throw Error('unused');}};
@@ -51,8 +53,9 @@ it('stores partial and cross-file runs, later processes one complete Episode wit
 it('overlaps Stage1 and Stage2, runs multiple documents at once and starts next Stage1 before earlier Wiki completes',async()=>{
   const p=await createProject(pool,'parallel-pipeline');
   let release:()=>void=()=>{};const gate=new Promise<void>(r=>{release=r;});
-  let stage1=0,stage2=0,active=0,peak=0;
-  const m:ChatModel={...model,partition:async events=>{stage1++;return model.partition(events);},memory:async()=>{stage2++;active++;peak=Math.max(peak,active);await gate;active--;return{markdown:'# 并行记录\n\n真实记录内容。'};}};
+  let releasePartitions:()=>void=()=>{};const partitionGate=new Promise<void>(r=>{releasePartitions=r;});
+  let stage1=0,stage2=0,active=0,peak=0,activePartitions=0,peakPartitions=0;
+  const m:ChatModel={...model,partition:async events=>{stage1++;activePartitions++;peakPartitions=Math.max(peakPartitions,activePartitions);await partitionGate;activePartitions--;return model.partition(events);},memory:async()=>{stage2++;active++;peak=Math.max(peak,active);await gate;active--;return{markdown:'# 并行记录\n\n真实记录内容。'};}};
   const app=await buildApp({pool,model:m,pipeline:{stage1:2,stage2:4,total:4}});await app.ready();
   try{
     for(let i=0;i<5;i++){
@@ -60,8 +63,84 @@ it('overlaps Stage1 and Stage2, runs multiple documents at once and starts next 
       await ingestBatch(pool,p.project_id,{source_id:'parallel',stream_id:'s'+i,harness:'xiaoba',records:rec});
       await app.inject({method:'POST',url:'/v1/ingest/complete',headers:{authorization:'Bearer '+p.key},payload:{source_id:'parallel',stream_id:'s'+i,end_offset:Buffer.from(rec[0].raw_base64,'base64').length}});
     }
+    await vi.waitFor(()=>expect(activePartitions).toBe(2),{timeout:7000});
+    expect(peakPartitions).toBe(2);expect(stage2).toBe(0);
+    releasePartitions();
     await vi.waitFor(()=>{expect(stage2).toBeGreaterThanOrEqual(2);expect(stage1).toBeGreaterThanOrEqual(3);},{timeout:7000});
     expect(peak).toBeGreaterThanOrEqual(2);expect(peak).toBeLessThanOrEqual(4);
     release();await vi.waitFor(async()=>{expect((await pool.query("select count(*)::int n from extraction_runs where project_id=$1 and status='completed'",[p.project_id])).rows[0].n).toBe(5);},{timeout:7000});
-  }finally{release();await app.close();}
+  }finally{releasePartitions();release();await app.close();}
 });
+
+it('rebuilds an unpublished partial plan and splits the exact scoped Stage2 payload at whole Episodes',async()=>{
+  const p=await createProject(pool,'plan-recovery-budget');
+  const calls:StoredEvent[][]=[];let partitions=0;
+  const m:ChatModel={...model,partition:async e=>{partitions++;return model.partition(e);},
+    inputTokens:(stage,e,t)=>stage==='stage1'?10:e.filter(x=>x.kind==='query').length*40+(t?.boundary_note.includes('本次仅含')?25:0),
+    memory:async(_t,_a,e)=>{calls.push(e);return{markdown:'# 分段记录\n\n本段的实际内容。'};}};
+  const budget:RequestBudget={count:s=>s.length,context:10000,output:100,margin:100,stage1:1000,stage2:100,method:'test-exact'};
+  const runner=new MemoryRunner(pool,m,4194304,2,undefined,budget);
+  try{
+    const rec=records([0,1,2].map(i=>({entry_type:'turn',user:{text:'恢复任务'+i},assistant:{text:'结果'+i,tool_calls:[]}})),0,'sessions/cli/2026-11-16/cli_recover.jsonl');
+    const ack=await ingestBatch(pool,p.project_id,{source_id:'recover',stream_id:'s',harness:'xiaoba',records:rec});
+    const refs=ack.records.flatMap(r=>r.event_refs);
+    const run=await runner.enqueueEvents(p.project_id,refs,{},{});
+    const queries=(await pool.query("select id from events where project_id=$1 and kind='query' order by id",[p.project_id])).rows;
+    const assignments=queries.map(q=>({query_ref:q.id,thread_ids:['T1'],role:'origin'}));
+    await pool.query('update extraction_runs set task_partition=$2 where id=$1',[run.run_id,JSON.stringify({task_threads:[thread],query_assignments:assignments,relations:[]})]);
+    await pool.query("insert into memory_tasks(id,project_id,run_id,thread_id,part_index,part_count,task_thread,assignments,input_refs) values($1,$2,$3,'T1',0,2,$4,$5,$6)",['partial-'+p.project_id,p.project_id,run.run_id,JSON.stringify(thread),JSON.stringify(assignments),JSON.stringify(refs.slice(0,2))]);
+    await runner.initialize();
+    await vi.waitFor(async()=>expect((await pool.query('select status from extraction_runs where id=$1',[run.run_id])).rows[0].status).toBe('completed'),{timeout:7000});
+    expect(partitions).toBe(0);expect(calls).toHaveLength(3);
+    expect(calls.every(e=>e.filter(x=>x.kind==='query').length===1)).toBe(true);
+    expect(calls.flat().map(e=>e.ref).sort()).toEqual([...refs].sort());
+    expect((await pool.query('select part_count from memory_tasks where run_id=$1',[run.run_id])).rows.map(r=>r.part_count)).toEqual([3,3,3]);
+  }finally{await runner.close();}
+});
+
+it('processes complete files and closed earlier days while a same-session historical file is blocked',async()=>{
+  const p=await createProject(pool,'blocked-history-range');
+  const runner=new MemoryRunner(pool,model),planner=new IngestionPlanner(pool,runner,model);
+  const turn=(text:string,timestamp:string)=>({entry_type:'turn',timestamp,user:{text},assistant:{text:'回复',tool_calls:[]}});
+  const a=records([turn('前一天','2026-11-15T23:00:00Z'),turn('未收齐当天','2026-11-16T23:00:00Z'),turn('当天剩余','2026-11-16T23:10:00Z')],0,'sessions/cli/2026-11-15/cli_blocked.jsonl');
+  const b=records([turn('完整文件','2026-11-17T23:00:00Z')],0,'sessions/cli/2026-11-17/cli_blocked.jsonl');
+  const size=(r:typeof a)=>r.reduce((n,x)=>n+Buffer.from(x.raw_base64,'base64').length,0);
+  await registerManifest(pool,p.project_id,{source_id:'bot',manifest_id:'all',session_key:'cli/cli_blocked.jsonl',lane:'backfill',files:[{stream_id:'a',end_offset:size(a),path:a[0].origin.path},{stream_id:'b',end_offset:size(b),path:b[0].origin.path}]});
+  await ingestBatch(pool,p.project_id,{source_id:'bot',stream_id:'a',harness:'xiaoba',records:a.slice(0,2)});
+  await ingestBatch(pool,p.project_id,{source_id:'bot',stream_id:'b',harness:'xiaoba',records:b});
+  await planner.plan(Date.parse('2026-11-20T00:00:00Z'));
+  const rows=(await pool.query('select logical_day,status from ingestion_episodes where project_id=$1 order by logical_day',[p.project_id])).rows;
+  expect(rows.map(r=>r.status)).toEqual(['queued','ready','queued']);
+  expect((await pool.query('select status from ingestion_manifests where project_id=$1',[p.project_id])).rows[0].status).toBe('waiting');
+  await ingestBatch(pool,p.project_id,{source_id:'bot',stream_id:'a',harness:'xiaoba',records:a.slice(2)});
+  await planner.plan(Date.parse('2026-11-20T00:00:00Z'));
+  expect((await pool.query("select count(*)::int n from ingestion_episodes where project_id=$1 and status='queued'",[p.project_id])).rows[0].n).toBe(4);
+  expect((await pool.query('select count(*)::int n from extraction_runs where project_id=$1',[p.project_id])).rows[0].n).toBe(3);
+  try{
+    await runner.initialize();
+    await vi.waitFor(async()=>expect((await pool.query("select count(*)::int n from extraction_runs where project_id=$1 and status='completed'",[p.project_id])).rows[0].n).toBe(3),{timeout:7000});
+  }finally{await runner.close();}
+});
+
+it('rotates past one hundred blocked sessions so later complete sessions are still planned',async()=>{
+  const p=await createProject(pool,'planner-fairness');
+  const runner=new MemoryRunner(pool,model),planner=new IngestionPlanner(pool,runner,model);
+  const rec=records([{entry_type:'turn',timestamp:'2026-11-16T12:00:00Z',user:{text:'正常就绪'},assistant:{text:'完整结果',tool_calls:[]}}],0,'sessions/cli/2026-11-16/cli_zready.jsonl');
+  const ack=await ingestBatch(pool,p.project_id,{source_id:'bot',stream_id:'s',harness:'xiaoba',records:rec});
+  const rawId=ack.records[0].raw_ref;
+  await pool.query(`insert into raw_records(id,project_id,source_id,stream_id,offset_bytes,raw,hash,metadata)
+    select $2||'-blocked-'||i,$1,'bot','s',10000+i,raw,hash,jsonb_set(metadata,'{origin}',jsonb_build_object('path','sessions/cli/2026-11-16/cli_blocked'||i||'.jsonl','offset',0)) from raw_records cross join generate_series(1,100) i where id=$2`,[p.project_id,rawId]);
+  await pool.query(`insert into ingestion_episodes(project_id,source_id,episode_key,session_key,lane,logical_day,started_at,ended_at,raw_ids,status)
+    select $1,'bot','blocked-'||i,'cli/cli_blocked'||i||'.jsonl','backfill','2026-11-16','2026-11-16T12:00:00Z','2026-11-16T12:00:00Z',jsonb_build_array($2||'-blocked-'||i),'ready' from generate_series(1,100) i`,[p.project_id,rawId]);
+  await pool.query(`insert into ingestion_manifests(project_id,source_id,manifest_id,session_key,lane,files,indexed_offsets)
+    select $1,'bot','blocked-'||i,'cli/cli_blocked'||i||'.jsonl','backfill',jsonb_build_array(jsonb_build_object('path','sessions/cli/2026-11-16/cli_blocked'||i||'.jsonl','stream_id','absent-'||i,'end_offset',999)),jsonb_build_object() from generate_series(1,100) i`,[p.project_id]);
+  await registerManifest(pool,p.project_id,{source_id:'bot',manifest_id:'ready',session_key:'cli/cli_zready.jsonl',lane:'backfill',files:[{stream_id:'s',end_offset:Buffer.from(rec[0].raw_base64,'base64').length,path:rec[0].origin.path}]});
+  try{
+    await planner.plan();await planner.plan();
+    expect((await pool.query('select count(*)::int n from extraction_runs where project_id=$1',[p.project_id])).rows[0].n).toBe(1);
+    await runner.initialize();await vi.waitFor(async()=>expect((await pool.query('select status from extraction_runs where project_id=$1',[p.project_id])).rows[0].status).toBe('completed'),{timeout:7000});
+  }finally{
+    await runner.close();
+    await pool.query("update ingestion_episodes set status='awaiting_material' where project_id=$1 and status='ready'",[p.project_id]);
+  }
+},60000);

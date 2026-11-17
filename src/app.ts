@@ -2,6 +2,7 @@ import { searchMemories } from "./memories.js";
 import { MemoryRunner } from "./extraction/memory-runner.js";
 import { IngestionPlanner, registerManifest } from './ingestion-planner.js';
 import { isObject } from './extraction/output.js';
+import { ingestFragment } from './record-fragments.js';
 import type { PipelineConfig } from './extraction/memory-runner.js';
 import Fastify from "fastify";
 import type { Pool } from "pg";
@@ -97,6 +98,10 @@ export async function buildApp({
         checkDataset(r.body);
         return ingestBatch(pool, (r as any).projectId, r.body as any, (r as any).uploadKeyId);
       });
+      api.post('/ingest/fragments', async r => {
+        checkDataset(r.body);
+        return ingestFragment(pool, (r as any).projectId, r.body, (r as any).uploadKeyId);
+      });
       api.post("/ingest/complete", async (r) => {
         checkDataset(r.body);
         const request = r.body as any;
@@ -120,6 +125,7 @@ export async function buildApp({
       api.get<{ Params: { id: string } }>("/extractions/:id", async (r) =>
         runner.get((r as any).projectId, r.params.id),
       );
+      api.post<{ Params: { id: string } }>('/extractions/:id/retry', async r => memory.retry((r as any).projectId, r.params.id));
       api.post("/episodes/search", async (r) =>
         searchEpisodes(pool, (r as any).projectId, r.body as any),
       );

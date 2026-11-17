@@ -16,6 +16,7 @@ interface TaskRow {
   id: string; project_id: string; run_id: string; thread_id: string; part_index: number; part_count: number;
   task_thread: TaskThread; assignments: QueryAssignment[]; input_refs: string[];
 }
+type TaskPlan = Omit<TaskRow, 'id' | 'project_id' | 'run_id'> & { deferred: boolean };
 export interface PipelineConfig { stage1: number; stage2: number; total: number; highWater: number }
 export class MemoryRunner {
   private active = new Map<string, { stage: 'stage1' | 'stage2'; promise: Promise<void> }>();
@@ -42,11 +43,27 @@ export class MemoryRunner {
     const events = await snapshotEvents(this.pool, p, request);
     if (!events.length) return { status: 'skipped', reason: 'no_normalized_events' };
     const result = await this.enqueueEvents(p, events.map(e => e.ref), request, { source: request.source_id });
-    if (request.retry) {
-      await this.pool.query("update extraction_runs set status='queued',error=null where project_id=$1 and id=$2 and status in ('failed','partial')", [p, result.run_id]);
-      await this.pool.query("update memory_tasks set status='queued',error=null where project_id=$1 and run_id=$2 and status='failed'", [p, result.run_id]);
-    }
+    if (request.retry) return this.retry(p, result.run_id);
     this.kick(); return result;
+  }
+  async retry(p: string, id: string) {
+    assert(this.model?.memory, 'Markdown memory model not configured', 503);
+    const c = await this.pool.connect();
+    try {
+      await c.query('begin');
+      const run = (await c.query<{ status: string; stage1_complete: boolean }>('select status,stage1_complete from extraction_runs where project_id=$1 and id=$2 and memory_request is not null for update', [p,id])).rows[0];
+      assert(run, 'unknown memory run', 404);
+      let status = run.status;
+      if (status === 'failed' || status === 'partial') {
+        const failed = await c.query("update memory_tasks set status='queued',error=null where project_id=$1 and run_id=$2 and status='failed'", [p,id]);
+        if (!run.stage1_complete || failed.rowCount) {
+          status = run.stage1_complete ? 'running' : 'queued';
+          await c.query('update extraction_runs set status=$3,error=null where project_id=$1 and id=$2', [p,id,status]);
+          await c.query("update ingestion_episodes set status='queued' where project_id=$1 and run_id=$2", [p,id]);
+        }
+      }
+      await c.query('commit'); this.kick(); return { run_id: id, status };
+    } catch (e) { await c.query('rollback'); throw e; } finally { c.release(); }
   }
   async enqueueEvents(p: string, refs: string[], request: unknown, meta: { lane?: string; source?: string; session?: string }, c: Pool | PoolClient = this.pool) {
     const result = await c.query<{ id: string; status: string }>(
@@ -127,8 +144,8 @@ export class MemoryRunner {
       const descriptors = (await this.pool.query(eventSelect.replace('e.*', "e.id,e.raw_id,e.ordinal,e.kind,e.pointer,'null' content_json,'' search_text,e.metadata") + ' where e.project_id=$1 and e.id=any($2::text[])', [run.project_id, run.input_refs])).rows;
       const byId = new Map(descriptors.map(r => [r.id, eventFromRow(r)]));
       const skeleton = run.input_refs.map(id => { const e = byId.get(id); assert(e, 'snapshot event missing'); return e; });
+      const plans: TaskPlan[] = [];
       for (const thread of partition.task_threads) {
-        if ((await this.pool.query('select 1 from memory_tasks where run_id=$1 and thread_id=$2', [run.id, thread.thread_id])).rowCount) continue;
         const assignments = partition.query_assignments.filter(a => a.thread_ids.includes(thread.thread_id));
         const selected = candidateEvents(skeleton, assignments.map(a => a.query_ref));
         const groups: StoredEvent[][] = [];
@@ -146,16 +163,39 @@ export class MemoryRunner {
           units.push({ refs: events.map(e => e.ref), tokens: this.cost('stage2', events, thread, a) });
         }
         // Sum full per-unit request costs conservatively; exact request is checked again before dispatch.
-        const parts = pack(units, u => overhead + u.reduce((n, x) => n + Math.max(0, x.tokens - overhead) + 8, 0), Math.min(this.tokens.stage2, hardInput(this.tokens)), 0);
+        const limit = Math.min(this.tokens.stage2, hardInput(this.tokens));
+        const parts = pack(units, u => overhead + u.reduce((n, x) => n + Math.max(0, x.tokens - overhead) + 8, 0), limit, 0);
+        const scopedThread = (index: number): TaskThread => parts.length > 1 ? { ...thread, boundary_note: thread.boundary_note + `\n本次仅含该任务的第 ${index + 1}/${parts.length} 段来源。只记录给定材料，不依据整体任务补写其他段结果。` } : thread;
+        // Validate the real final payload, including scoped instructions. Only an indivisible
+        // runtime Episode may be deferred; repeat after splitting because part counts changed.
+        for (let changed = true; changed;) {
+          changed = false;
+          for (let index = 0; index < parts.length; index++) {
+            const part = parts[index], refs = part.flatMap(x => x.refs), set = new Set(refs);
+            const events = await this.events(run.project_id, refs);
+            if (this.cost('stage2', events, scopedThread(index), assignments.filter(a => set.has(a.query_ref))) > limit && part.length > 1) {
+              const middle = Math.ceil(part.length / 2);
+              parts.splice(index, 1, part.slice(0, middle), part.slice(middle)); changed = true; break;
+            }
+          }
+        }
         for (const [index, part] of parts.entries()) {
           const refs = part.flatMap(x => x.refs), set = new Set(refs);
-          const deferred = part.some(x => x.tokens > Math.min(this.tokens.stage2, hardInput(this.tokens)));
-          const scoped = parts.length > 1 ? { ...thread, boundary_note: thread.boundary_note + `\n本次仅含该任务的第 ${index + 1}/${parts.length} 段来源。只记录给定材料，不依据整体任务补写其他段结果。` } : thread;
-          await this.pool.query("insert into memory_tasks(id,project_id,run_id,thread_id,part_index,part_count,task_thread,assignments,input_refs,status,error) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) on conflict do nothing",
-            [ref('job'), run.project_id, run.id, thread.thread_id, index, parts.length, JSON.stringify(scoped), JSON.stringify(assignments.filter(a => set.has(a.query_ref))), JSON.stringify(refs), deferred ? 'deferred_oversize' : 'queued', deferred ? 'deferred_oversize:stage2:single_episode' : null]);
+          const scoped = scopedThread(index), localAssignments = assignments.filter(a => set.has(a.query_ref));
+          const deferred = this.cost('stage2', await this.events(run.project_id, refs), scoped, localAssignments) > limit;
+          plans.push({ thread_id: thread.thread_id, part_index: index, part_count: parts.length, task_thread: scoped, assignments: localAssignments, input_refs: refs, deferred });
         }
       }
-      await this.pool.query("update extraction_runs set status='running',stage1_complete=true where id=$1", [run.id]);
+      const c = await this.pool.connect();
+      try {
+        await c.query('begin');
+        // Unpublished plans cannot run. Replace any interrupted older partial plan atomically.
+        await c.query('delete from memory_tasks where run_id=$1', [run.id]);
+        for (const plan of plans) await c.query("insert into memory_tasks(id,project_id,run_id,thread_id,part_index,part_count,task_thread,assignments,input_refs,status,error) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+          [ref('job'), run.project_id, run.id, plan.thread_id, plan.part_index, plan.part_count, JSON.stringify(plan.task_thread), JSON.stringify(plan.assignments), JSON.stringify(plan.input_refs), plan.deferred ? 'deferred_oversize' : 'queued', plan.deferred ? 'deferred_oversize:stage2:single_episode' : null]);
+        await c.query("update extraction_runs set status='running',stage1_complete=true where id=$1", [run.id]);
+        await c.query('commit');
+      } catch (e) { await c.query('rollback'); throw e; } finally { c.release(); }
       await this.summarize(run.id);
     } catch (e) { await this.pool.query("update extraction_runs set status='failed',error=$2 where id=$1", [run.id, message(e)]); }
   }
