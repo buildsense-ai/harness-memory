@@ -37,6 +37,8 @@ Defaults: Stage1 maximum 2, Stage2 maximum 6, global in-flight stage jobs maximu
 
 One coordinator holds an advisory lock. Restart recovers abandoned running stage tasks, reuses stored partitions and preserves successful documents. This is bounded asynchronous execution on one Node process, not a multi-host worker architecture. A database pool of 5 remains configurable by `DATABASE_POOL_MAX`; large candidates are only materialized for active work. Raise concurrency only after measuring host memory, database waits and provider limits. Remote LLM computation needs no local GPU.
 
+Run completion or failure commits the same terminal status and error to its owned Episodes atomically. A retry clears stale Episode errors. Coordinator startup reconciles Episode status with already-finished runs without repeating model calls or changing published memories.
+
 ## Budgets and configuration
 
 Use the matching model's Hugging Face `tokenizer.json` via `MODEL_TOKENIZER_FILE`; the implementation counts bounded 64K-character slices and adds request framing allowance. Missing tokenizer uses UTF-8 bytes conservatively and reports that method in batch requests. It never assumes a fixed Chinese-character/token ratio. Validate the tokenizer against provider usage before increasing limits. Every dispatch and schema-feedback retry rechecks actual serialized messages/tools plus configured output and margin. Keep thinking enabled, effort max and output 131072.

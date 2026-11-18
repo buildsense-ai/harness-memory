@@ -59,7 +59,7 @@ export class MemoryRunner {
         if (!run.stage1_complete || failed.rowCount) {
           status = run.stage1_complete ? 'running' : 'queued';
           await c.query('update extraction_runs set status=$3,error=null where project_id=$1 and id=$2', [p,id,status]);
-          await c.query("update ingestion_episodes set status='queued' where project_id=$1 and run_id=$2", [p,id]);
+          await c.query("update ingestion_episodes set status='queued',error=null where project_id=$1 and run_id=$2", [p,id]);
         }
       }
       await c.query('commit'); this.kick(); return { run_id: id, status };
@@ -86,6 +86,9 @@ export class MemoryRunner {
     await c.query("update extraction_runs r set status='running' where r.stage1_complete and r.status='queued' and exists(select 1 from memory_tasks t where t.run_id=r.id and t.status in ('queued','running'))");
     const finished = (await c.query<{ id: string }>("select id from extraction_runs r where memory_request is not null and stage1_complete and status in ('queued','running') and not exists(select 1 from memory_tasks t where t.run_id=r.id and t.status in ('queued','running'))")).rows;
     for (const run of finished) await this.summarize(run.id);
+    await this.lock.query(`update ingestion_episodes e set status=r.status,error=r.error from extraction_runs r
+      where e.project_id=r.project_id and e.run_id=r.id and r.memory_request is not null
+        and r.status in ('completed','failed','partial') and (e.status is distinct from r.status or e.error is distinct from r.error)`);
     return true;
   }
   private count(stage: string) { return [...this.active.values()].filter(x => x.stage === stage).length; }
@@ -197,7 +200,7 @@ export class MemoryRunner {
         await c.query('commit');
       } catch (e) { await c.query('rollback'); throw e; } finally { c.release(); }
       await this.summarize(run.id);
-    } catch (e) { await this.pool.query("update extraction_runs set status='failed',error=$2 where id=$1", [run.id, message(e)]); }
+    } catch (e) { await this.finishRun(run.id, 'failed', message(e)); }
   }
   private async generate(task: TaskRow) {
     try {
@@ -233,8 +236,13 @@ export class MemoryRunner {
     if (states.some(s => s === 'queued' || s === 'running')) return;
     const errors = (await this.pool.query<{ error: string; thread_id: string; part_index: number }>('select error,thread_id,part_index from memory_tasks where run_id=$1 and error is not null', [id])).rows.map(x => x.thread_id + '/part-' + x.part_index + ': ' + x.error);
     const status = states.some(s => s !== 'completed') ? states.includes('completed') ? 'partial' : 'failed' : 'completed';
-    await this.pool.query('update extraction_runs set status=$2,error=$3 where id=$1', [id, status, errors.length ? errors.join('; ').slice(0, 4000) : null]);
-    await this.pool.query('update ingestion_episodes set status=$2 where run_id=$1', [id, status]);
+    await this.finishRun(id, status, errors.length ? errors.join('; ').slice(0, 4000) : null);
+  }
+  private async finishRun(id: string, status: 'completed' | 'failed' | 'partial', error: string | null) {
+    await this.pool.query(`with finished as (
+      update extraction_runs set status=$2,error=$3 where id=$1 returning project_id,id
+    ) update ingestion_episodes e set status=$2,error=$3 from finished r where e.project_id=r.project_id and e.run_id=r.id`,
+    [id, status, error]);
   }
   async wait() {
     do { await this.polling; await Promise.all([...this.active.values()].map(x => x.promise)); } while (this.polling || this.active.size);

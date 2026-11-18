@@ -74,6 +74,45 @@ it('overlaps Stage1 and Stage2, runs multiple documents at once and starts next 
   }finally{releasePartitions();release();await app.close();}
 });
 
+it('publishes Stage1 failure on its Episodes and clears it when a retry completes',async()=>{
+  const p=await createProject(pool,'partition-failure-status');
+  let fail=true;
+  const m:ChatModel={...model,partition:async events=>{if(fail)throw Error('partition service unavailable');return model.partition(events);}};
+  const runner=new MemoryRunner(pool,m),planner=new IngestionPlanner(pool,runner,m);
+  const rec=records(runRows('partition-failure'));
+  try{
+    await registerManifest(pool,p.project_id,{source_id:'bot',manifest_id:'failure',session_key:'cli/cli_test.jsonl',lane:'backfill',files:[{stream_id:'s',end_offset:rec.reduce((n,r)=>n+Buffer.from(r.raw_base64,'base64').length,0),path:rec[0].origin.path}]});
+    await ingestBatch(pool,p.project_id,{source_id:'bot',stream_id:'s',harness:'xiaoba',records:rec});
+    await planner.plan();await runner.initialize();
+    await vi.waitFor(async()=>expect((await pool.query('select status,error from ingestion_episodes where project_id=$1',[p.project_id])).rows).toEqual([{status:'failed',error:'partition service unavailable'}]),{timeout:7000});
+    const run=(await pool.query('select id,status,error from extraction_runs where project_id=$1',[p.project_id])).rows[0];
+    expect(run).toMatchObject({status:'failed',error:'partition service unavailable'});
+    expect((await pool.query('select count(*)::int n from memory_documents where project_id=$1',[p.project_id])).rows[0].n).toBe(0);
+    fail=false;await runner.retry(p.project_id,run.id);
+    await vi.waitFor(async()=>expect((await pool.query('select status,error from ingestion_episodes where project_id=$1',[p.project_id])).rows).toEqual([{status:'completed',error:null}]),{timeout:7000});
+    expect((await pool.query('select count(*)::int n from memory_documents where project_id=$1',[p.project_id])).rows[0].n).toBe(1);
+  }finally{await runner.close();}
+});
+
+it('repairs Episode status from a previously failed Stage1 at coordinator startup without rerunning it',async()=>{
+  const p=await createProject(pool,'recover-partition-failure-status');
+  let calls=0;
+  const m:ChatModel={...model,partition:async events=>{calls++;return model.partition(events);}};
+  const runner=new MemoryRunner(pool,m),planner=new IngestionPlanner(pool,runner,m);
+  const rec=records(runRows('old-partition-failure'));
+  try{
+    await registerManifest(pool,p.project_id,{source_id:'bot',manifest_id:'old-failure',session_key:'cli/cli_test.jsonl',lane:'backfill',files:[{stream_id:'s',end_offset:rec.reduce((n,r)=>n+Buffer.from(r.raw_base64,'base64').length,0),path:rec[0].origin.path}]});
+    await ingestBatch(pool,p.project_id,{source_id:'bot',stream_id:'s',harness:'xiaoba',records:rec});
+    await planner.plan();
+    await pool.query("update extraction_runs set status='failed',error='old partition failure' where project_id=$1",[p.project_id]);
+    expect((await pool.query('select status,error from ingestion_episodes where project_id=$1',[p.project_id])).rows).toEqual([{status:'queued',error:null}]);
+    await runner.initialize();
+    await vi.waitFor(async()=>expect((await pool.query('select status,error from ingestion_episodes where project_id=$1',[p.project_id])).rows).toEqual([{status:'failed',error:'old partition failure'}]),{timeout:7000});
+    expect(calls).toBe(0);
+    expect((await pool.query('select count(*)::int n from memory_documents where project_id=$1',[p.project_id])).rows[0].n).toBe(0);
+  }finally{await runner.close();}
+});
+
 it('rebuilds an unpublished partial plan and splits the exact scoped Stage2 payload at whole Episodes',async()=>{
   const p=await createProject(pool,'plan-recovery-budget');
   const calls:StoredEvent[][]=[];let partitions=0;
