@@ -88,7 +88,7 @@ it('uses four default Stage1 slots and lets Stage2 borrow twelve without exceedi
   const runner=new MemoryRunner(pool,m);
   try{
     for(let i=0;i<13;i++){
-      const rec=records([{entry_type:'turn',user:{text:'默认任务'+i},assistant:{text:'结果'+i,tool_calls:[]}}]);
+      const rec=records([{entry_type:'turn',user:{text:'默认任务'+i},assistant:{text:'结果'+i,tool_calls:[]}}],0,`sessions/cli/2026-11-16/cli_default_parallel${i}.jsonl`);
       const end=Buffer.from(rec[0].raw_base64,'base64').length;
       await ingestBatch(pool,p.project_id,{source_id:'default-parallel',stream_id:'s'+i,harness:'xiaoba',records:rec});
       await runner.enqueue(p.project_id,{source_id:'default-parallel',stream_id:'s'+i,end_offset:end});
