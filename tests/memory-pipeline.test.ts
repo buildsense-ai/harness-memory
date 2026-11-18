@@ -235,7 +235,8 @@ it("publishes successful threads but rejects a malformed document instead of sto
   expect((await s.post("/v1/memories/search",{keywords:["no body"]})).json().items).toEqual([]);
   const originalId=x.status.documents[0].memory_id;
   s.model.memory=async t=>({markdown:"# "+t.title+"\n\n完整历史记录。"});
-  const retry=(await s.post("/v1/ingest/complete",{...x.complete,retry:true})).json();expect(retry.run_id).toBe(x.run);
+  expect((await s.post('/v1/extractions/'+x.run+'/retry',{},s.other.key)).statusCode).toBe(404);
+  const retry=(await s.post('/v1/extractions/'+x.run+'/retry',{})).json();expect(retry.run_id).toBe(x.run);
   await vi.waitFor(async()=>{const r=(await s.app.inject({method:"GET",url:"/v1/extractions/"+x.run,headers:{authorization:"Bearer "+s.p.key}})).json();expect(r.status).toBe("completed");expect(r.documents).toHaveLength(2);expect(r.documents.some((d:any)=>d.memory_id===originalId)).toBe(true);},{timeout:7000,interval:20});
   expect(s.partition).toHaveBeenCalledTimes(1);
 });

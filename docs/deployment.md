@@ -12,6 +12,8 @@ One service and one database on Monday. The workbench and API are served by that
 
 The browser sends the project Key as a Bearer credential, so the public entry must use HTTPS. Do not expose port 8460 directly over plain HTTP. Confirm both `curl https://<hostname>/healthz` and `https://<hostname>/workbench` from a client outside Monday's network.
 
+For the separate keyless Bot upload ingress on Monday's nonstandard HTTPS port, use [public-upload.md](public-upload.md) and `deploy/nginx-memory-upload.conf.example`. That virtual host exposes only the Bot upload routes and keeps the existing internal ingress. It does not publish the workbench or read/search APIs.
+
 Before updates, create a private dump with the service credentials or as postgres:
 
 ```sh

@@ -4,13 +4,13 @@ An early memory service for XiaoBa and Pi. It stores uploaded logs, partitions d
 
 ## What works in v0.1
 
-- XiaoBa and Pi log adapters, incremental upload, PostgreSQL persistence, project-scoped API Keys, and immutable source references.
+- XiaoBa and Pi log adapters, incremental upload, PostgreSQL persistence, authorized search/source reads, and immutable source references. XiaoBa's independent automatic uploader uses a separate keyless Bot UID ingress.
 - Automatic Stage 1 task partitioning from uploaded query/message records, followed by Stage 2 Markdown generation from each task's complete selected turns.
 - Literal AND/OR search across published Markdown, with deduplication before the ten-document page limit.
 - A same-origin workbench at `/workbench` for upload streams, processing runs, task assignments, published memories, search, and original-source reads.
 - Episode and exact raw-record reads with SHA-256 returned for the original bytes.
 
-The workbench displays provenance stored in PostgreSQL. It does not infer semantic links between memories or record which search results an Agent later used. The service does not automatically discover historical files. XiaoBa aggregate turn logs cannot reconstruct intermediate assistant messages that the source log did not save. Pi extraction follows one explicit branch. Oversized model inputs fail visibly; raw uploads remain stored.
+The workbench displays provenance stored in PostgreSQL. It does not infer semantic links between memories or record which search results an Agent later used. The independent XiaoBa uploader discovers full history and future appends; Monday stores originals, plans whole Episodes and processes persistent stage queues. Legacy aggregate turns cannot reconstruct messages that the source did not save. Pi extraction follows one explicit branch. Oversized indivisible inputs remain visibly deferred with their originals stored.
 
 ## Run
 
@@ -24,7 +24,9 @@ node --env-file=.env dist/src/admin.js project-create demo
 node --env-file=.env dist/src/server.js
 ```
 
-Copy `.env.example` to `.env` and configure `DATABASE_URL`. Model variables are optional for upload/read, required for extraction. The service binds to `127.0.0.1:8460`; on Monday, Nginx exposes the workbench and API over HTTPS at the server's public hostname. Do not expose the plain HTTP application port because API Keys are sent as Bearer credentials. `MODEL_INPUT_BUDGET` is the UTF-8 byte budget of the messages array (default 65536), not a tokenizer count; leave enough provider context for the configured output (default 4096 tokens).
+Copy `.env.example` to `.env` and configure `DATABASE_URL`. Model variables are optional for upload/read, required for extraction. The service binds to `127.0.0.1:8460`. Monday's public ingress proxies only the keyless Bot config/upload routes; authorized search, workbench and original reads remain on the private application endpoint. The shared pipeline uses tokenizer-based context/output limits, 200K Stage1 and 880K Stage2 request targets by default. `MODEL_INPUT_BUDGET` applies to the legacy extraction path. See [full-history pipeline](docs/full-history-pipeline.md) for the automatic uploader, budgets, concurrency and deployment settings.
+
+Automatic Bot uploads require no client memory key or project configuration. `/v1/bot-ingest/config` provides the dataset; `/v1/bots/{uid}/ingest/{manifests,batches,fragments}` accepts logs. `MEMORY_BOT_PROJECT_ID` selects their server-owned workspace. UID declares provenance, not authentication. Names update on upload without rewriting originals. The manual single-file uploader below continues using project authorization.
 
 Save the returned project Key in a private local connector file, e.g. `connector.local.json`:
 
@@ -49,7 +51,7 @@ Only upload logs you intend to store. The service does not automatically remove 
 
 ## Known limits
 
-- Ordinary batches only, max 4 MiB encoded request. Oversized individual records stop upload visibly; no multipart protocol.
+- Ordinary HTTP requests are limited to 4 MiB. The automatic uploader uses resumable fragments for original records over 1 MiB, up to 64 MiB per whole record; larger records stop that file visibly.
 - Source files must remain append-only. Rewritten/truncated files require a fresh stream; server evidence is never overwritten.
 - Failed delivery retains the local offset; there is no independent spool if the source file disappears.
 - Individual task failures can leave a run partial. Retry and restart behavior is documented in [API](docs/api.md).

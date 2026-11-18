@@ -1,5 +1,11 @@
 import { searchMemories } from "./memories.js";
 import { MemoryRunner } from "./extraction/memory-runner.js";
+import { IngestionPlanner } from './ingestion-planner.js';
+import { registerManifest } from './ingestion/manifests.js';
+import { isObject } from './extraction/output.js';
+import { ingestFragment } from './record-fragments.js';
+import { registerBotIngestion } from './bot-ingestion.js';
+import type { PipelineConfig } from './extraction/memory-runner.js';
 import Fastify from "fastify";
 import type { Pool } from "pg";
 import { assert } from "./contracts.js";
@@ -23,14 +29,14 @@ export async function buildApp({
   pool,
   model,
   budget = 65536,
-  memoryBudget = 4 * 1024 * 1024,
-  memoryRunConcurrency = 2,
+  pipeline,
+  botUploadProject = 'prj_bot_uploads',
 }: {
   pool: Pool;
   model?: ChatModel;
   budget?: number;
-  memoryBudget?: number;
-  memoryRunConcurrency?: number;
+  pipeline?: Partial<PipelineConfig>;
+  botUploadProject?: string;
 }) {
   const app = Fastify({ bodyLimit: 4 * 1024 * 1024, logger: false });
   app.get("/workbench", async (_request, reply) => reply.type("text/html; charset=utf-8").send(WORKBENCH_HTML));
@@ -38,9 +44,10 @@ export async function buildApp({
   app.get("/workbench-overrides.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(WORKBENCH_OVERRIDES_CSS));
   app.get("/workbench.js", async (_request, reply) => reply.type("text/javascript; charset=utf-8").send(WORKBENCH_JS));
   const runner = new ExtractionRunner(pool, model, budget);
-  const memory = new MemoryRunner(pool, model, memoryBudget, memoryRunConcurrency);
-  app.addHook("onReady", async () => memory.initialize());
-  app.addHook("onClose", async () => { await memory.close(); await runner.wait(); });
+  const memory = new MemoryRunner(pool, model, pipeline);
+  const planner = new IngestionPlanner(pool, memory, model);
+  app.addHook("onReady", async () => { await memory.initialize(); planner.start(); });
+  app.addHook("onClose", async () => { await planner.close(); await memory.close(); await runner.wait(); });
   app.setErrorHandler((error, _request, reply) => {
     const e = error as Error & { statusCode?: number };
     const status = e.statusCode ?? 500;
@@ -52,6 +59,7 @@ export async function buildApp({
     await pool.query("select 1");
     return { ok: true };
   });
+  await registerBotIngestion(app, pool, botUploadProject);
   await app.register(
     async (api) => {
       api.decorateRequest("projectId", "");
@@ -67,10 +75,36 @@ export async function buildApp({
         (request as any).projectId = identity.project_id;
         (request as any).uploadKeyId = identity.upload_key_id;
       });
-      api.post("/ingest/batches", async (r) =>
-        ingestBatch(pool, (r as any).projectId, r.body as any, (r as any).uploadKeyId),
-      );
+      const checkDataset = (body: unknown) => {
+        assert(isObject(body), 'invalid upload');
+        const dataset = process.env.MEMORY_DATASET_ID;
+        if (dataset) assert(body.dataset_id === dataset, 'memory dataset mismatch; uploader must use current dataset', 409);
+      };
+      api.post('/ingest/manifests', async r => {
+        checkDataset(r.body);
+        return registerManifest(pool, (r as any).projectId, r.body);
+      });
+      api.get('/ingest/status', async r => {
+        const p = (r as any).projectId;
+        return {
+          dataset_id: process.env.MEMORY_DATASET_ID ?? null,
+          manifests: (await pool.query('select status,count(*)::int count from ingestion_manifests where project_id=$1 group by status', [p])).rows,
+          episodes: (await pool.query('select status,error,count(*)::int count from ingestion_episodes where project_id=$1 group by status,error', [p])).rows,
+          stages: (await pool.query('select status,count(*)::int count from memory_tasks where project_id=$1 group by status', [p])).rows,
+          runs: (await pool.query('select status,count(*)::int count from extraction_runs where project_id=$1 group by status', [p])).rows,
+          wiki_count: (await pool.query('select count(*)::int count from memory_documents where project_id=$1', [p])).rows[0].count,
+        };
+      });
+      api.post('/ingest/batches', async r => {
+        checkDataset(r.body);
+        return ingestBatch(pool, (r as any).projectId, r.body as any, (r as any).uploadKeyId);
+      });
+      api.post('/ingest/fragments', async r => {
+        checkDataset(r.body);
+        return ingestFragment(pool, (r as any).projectId, r.body, (r as any).uploadKeyId);
+      });
       api.post("/ingest/complete", async (r) => {
+        checkDataset(r.body);
         const request = r.body as any;
         assert(request && Number.isSafeInteger(request.end_offset) && request.end_offset > 0, "complete requires an acknowledged end_offset");
         return memory.enqueue((r as any).projectId, request);
@@ -92,6 +126,7 @@ export async function buildApp({
       api.get<{ Params: { id: string } }>("/extractions/:id", async (r) =>
         runner.get((r as any).projectId, r.params.id),
       );
+      api.post<{ Params: { id: string } }>('/extractions/:id/retry', async r => memory.retry((r as any).projectId, r.params.id));
       api.post("/episodes/search", async (r) =>
         searchEpisodes(pool, (r as any).projectId, r.body as any),
       );

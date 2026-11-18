@@ -9,11 +9,13 @@ import {
 } from "./contracts.js";
 import { projectRecord } from "./adapters/index.js";
 import { workbenchMetadata } from "./workbench-metadata.js";
+import { botUid, type UploadBot } from './ingestion/bot-identity.js';
 export async function ingestBatch(
   pool: Pool,
   projectId: string,
   b: UploadBatch,
   uploadKeyId?: string,
+  bot?: UploadBot,
 ): Promise<IngestAck> {
   assert(
     b &&
@@ -46,6 +48,7 @@ export async function ingestBatch(
       )
     ).rows[0];
     assert(s.harness === b.harness, "harness conflict", 409);
+    await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [projectId + ':' + b.source_id]);
     let next = Number(s.next_offset);
     const out: IngestAck["records"] = [];
     let previousEnd: number | undefined;
@@ -84,6 +87,8 @@ export async function ingestBatch(
       }
       const p = projectRecord(b.harness, raw),
         expected = p.events.map(({ content, text, fidelity, ...d }) => d);
+      const display = workbenchMetadata(raw, p);
+      if (bot && display.bot_id) assert(botUid(display.bot_id) === bot.uid, 'record belongs to another bot', 409);
       if (r.events !== undefined)
         assert(
           Array.isArray(r.events) && isDeepStrictEqual(expected, r.events),
@@ -91,7 +96,7 @@ export async function ingestBatch(
         );
       const old = (
         await c.query(
-          "select id,hash,metadata from raw_records where project_id=$1 and source_id=$2 and stream_id=$3 and offset_bytes=$4",
+          "select id,hash,metadata from raw_records where project_id=$1 and source_id=$2 and stream_id=$3 and offset_bytes=$4 union all select raw_id id,hash,jsonb_build_object('origin',origin) metadata from ingest_receipts where project_id=$1 and source_id=$2 and stream_id=$3 and offset_bytes=$4 limit 1",
           [projectId, b.source_id, b.stream_id, r.offset],
         )
       ).rows[0];
@@ -107,6 +112,14 @@ export async function ingestBatch(
         id = old.id;
       } else {
         assert(r.offset === next, "offset conflict", 409);
+        const overlap = r.origin ? (await c.query<{ id: string; hash: string; metadata: { origin: { offset: number } }; bytes: number }>(
+          "select id,hash,metadata,octet_length(raw) bytes from raw_records where project_id=$1 and source_id=$2 and metadata->'origin'->>'path'=$3 and (metadata->'origin'->>'offset')::bigint < $4 and (metadata->'origin'->>'offset')::bigint + octet_length(raw) > $5 limit 1",
+          [projectId, b.source_id, r.origin.path, r.origin.offset + raw.length, r.origin.offset])).rows[0] : undefined;
+        if (overlap) {
+          assert(overlap.metadata.origin.offset === r.origin!.offset && overlap.bytes === raw.length && overlap.hash === sha256(raw), 'source origin overlap conflict', 409);
+          id = overlap.id;
+          await c.query('insert into ingest_receipts(project_id,source_id,stream_id,offset_bytes,raw_id,length_bytes,hash,origin) values($1,$2,$3,$4,$5,$6,$7,$8)', [projectId,b.source_id,b.stream_id,r.offset,id,raw.length,sha256(raw),JSON.stringify(r.origin)]);
+        } else {
         id = ref("raw");
         await c.query(
           "insert into raw_records(id,project_id,source_id,stream_id,offset_bytes,raw,hash,metadata,received_at,upload_key_id) values($1,$2,$3,$4,$5,$6,$7,$8,now(),$9)",
@@ -131,7 +144,8 @@ export async function ingestBatch(
               transcript_sequence: p.transcript_sequence,
               session_id: p.session_id,
               run_id: p.run_id,
-              ...workbenchMetadata(raw, p),
+              ...display,
+              ...(bot ? { bot_id: bot.uid, bot_name: bot.name ?? display.bot_name, bot_identity_source: display.bot_id ? 'recorded' : 'upload_declared' } : {}),
               ...(r.origin ? { origin: r.origin } : {}),
             }),
             uploadKeyId ?? null,
@@ -153,6 +167,7 @@ export async function ingestBatch(
               JSON.stringify(meta),
             ],
           );
+        }
         }
         next = r.offset + raw.length;
       }
@@ -178,7 +193,7 @@ export async function ingestBatch(
       );
     }
     await c.query("COMMIT");
-    return { next_offset: previousEnd!, records: out };
+    return { next_offset: previousEnd!, records: out, sha256: sha256(Buffer.concat(b.records.map(r => Buffer.from(r.raw_base64, 'base64')))) };
   } catch (e) {
     await c.query("ROLLBACK");
     throw e;
