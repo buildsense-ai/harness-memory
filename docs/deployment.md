@@ -39,6 +39,10 @@ Configure the service WorkingDirectory as `/opt/harness-memory-current` (an atom
 
 `/var/lib/harness-memory/deployed-sha` records the last successful exact main SHA. Release directories and private dumps are retained for rollback; this small deployment addition does not implement retention/garbage collection.
 
+Concurrency defaults are versioned in `defaultPipelineConfig`: Stage1 4, Stage2 12, global 12. The server and runner share that definition. Omit the three `MEMORY_*_CONCURRENCY` overrides to use the reviewed release defaults; explicit lower values remain available for smaller hosts. Submit concurrency changes through a PR, then merge, deploy and verify the active process configuration. A failed-task retry is an operation through the existing authorized retry API, not a code deployment.
+
+The versioned service unit allows up to 50 minutes for active model jobs to drain on stop, instead of killing them after 15 seconds. Install an updated `deploy/harness-memory.service` only after its PR is merged, then run `systemctl daemon-reload` before deployment. Keep the host's existing release-path drop-in. During draining the HTTP listener closes, so uploaders may retry transient connection failures; persisted task states recover after a forced stop at the deadline. Do not raise model concurrency beyond the reviewed limits while a release is draining.
+
 ## Verified deployment and real-log acceptance (2026-11-02)
 
 Main `9d65c71449a4931b816b3649374678307214e860` was deployed successfully by Actions run `41444460663` after all 30 TypeScript tests, the PostgreSQL integration tests, build and four deployment tests passed. A release-directory permission failure during setup exercised code rollback; the old service recovered. After correcting host permissions, the same tested SHA passed deployment and health checks.

@@ -74,6 +74,37 @@ it('overlaps Stage1 and Stage2, runs multiple documents at once and starts next 
   }finally{releasePartitions();release();await app.close();}
 });
 
+it('uses four default Stage1 slots and lets Stage2 borrow twelve without exceeding the shared limit',async()=>{
+  const p=await createProject(pool,'default-twelve-slot-pipeline');
+  let releasePartitions:()=>void=()=>{},releaseDocuments:()=>void=()=>{};
+  const partitionGate=new Promise<void>(resolve=>{releasePartitions=resolve;});
+  const documentGate=new Promise<void>(resolve=>{releaseDocuments=resolve;});
+  let activePartitions=0,activeDocuments=0,peak=0;
+  const observe=()=>{peak=Math.max(peak,activePartitions+activeDocuments);};
+  const m:ChatModel={...model,
+    partition:async events=>{activePartitions++;observe();try{await partitionGate;return await model.partition(events);}finally{activePartitions--;}},
+    memory:async()=>{activeDocuments++;observe();try{await documentGate;return{markdown:'# 默认并行\n\n已记录原文。'};}finally{activeDocuments--;}}
+  };
+  const runner=new MemoryRunner(pool,m);
+  try{
+    for(let i=0;i<13;i++){
+      const rec=records([{entry_type:'turn',user:{text:'默认任务'+i},assistant:{text:'结果'+i,tool_calls:[]}}],0,`sessions/cli/2026-11-16/cli_default_parallel${i}.jsonl`);
+      const end=Buffer.from(rec[0].raw_base64,'base64').length;
+      await ingestBatch(pool,p.project_id,{source_id:'default-parallel',stream_id:'s'+i,harness:'xiaoba',records:rec});
+      await runner.enqueue(p.project_id,{source_id:'default-parallel',stream_id:'s'+i,end_offset:end});
+    }
+    await runner.initialize();
+    await vi.waitFor(()=>expect(activePartitions).toBe(4),{timeout:7000});
+    expect(activeDocuments).toBe(0);
+    releasePartitions();
+    await vi.waitFor(()=>expect(activeDocuments).toBe(12),{timeout:7000});
+    expect(peak).toBe(12);
+    releaseDocuments();
+    await vi.waitFor(async()=>expect((await pool.query('select count(*)::int n from memory_documents where project_id=$1',[p.project_id])).rows[0].n).toBe(13),{timeout:7000});
+    expect(peak).toBe(12);
+  }finally{releasePartitions();releaseDocuments();await runner.close();}
+});
+
 it('publishes Stage1 failure on its Episodes and clears it when a retry completes',async()=>{
   const p=await createProject(pool,'partition-failure-status');
   let fail=true;

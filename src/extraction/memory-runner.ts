@@ -18,6 +18,7 @@ interface TaskRow {
 }
 type TaskPlan = Omit<TaskRow, 'id' | 'project_id' | 'run_id'> & { deferred: boolean };
 export interface PipelineConfig { stage1: number; stage2: number; total: number; highWater: number }
+export const defaultPipelineConfig: Readonly<PipelineConfig> = { stage1: 4, stage2: 12, total: 12, highWater: 1000 };
 export class MemoryRunner {
   private active = new Map<string, { stage: 'stage1' | 'stage2'; promise: Promise<void> }>();
   private timer?: ReturnType<typeof setInterval>;
@@ -28,7 +29,7 @@ export class MemoryRunner {
   private readonly config: PipelineConfig;
   private readonly tokens: RequestBudget;
   constructor(private pool: Pool, private model: ChatModel | undefined, config?: Partial<PipelineConfig>, tokens?: RequestBudget) {
-    this.config = { stage1: 2, stage2: 6, total: 6, highWater: 1000, ...config };
+    this.config = { ...defaultPipelineConfig, ...config };
     this.tokens = tokens ?? configuredBudget();
     assert(Object.values(this.config).every(n => Number.isSafeInteger(n) && n > 0), 'invalid pipeline concurrency');
     assert(this.config.stage1 <= this.config.total && this.config.stage2 <= this.config.total && this.config.total <= 64, 'invalid global concurrency');

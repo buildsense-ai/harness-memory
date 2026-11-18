@@ -2,6 +2,7 @@ import { createPool } from "./db/pool.js";
 import { migrate } from "./db/migrate.js";
 import { buildApp } from "./app.js";
 import { configuredModel } from "./extraction/model.js";
+import { defaultPipelineConfig } from "./extraction/memory-runner.js";
 const pool = createPool();
 await migrate(pool);
 await pool.query(
@@ -13,10 +14,10 @@ const app = await buildApp({
   botUploadProject: process.env.MEMORY_BOT_PROJECT_ID,
   budget: Number(process.env.MODEL_INPUT_BUDGET ?? 65536),
   pipeline: {
-    stage1: Number(process.env.MEMORY_STAGE1_CONCURRENCY ?? 2),
-    stage2: Number(process.env.MEMORY_STAGE2_CONCURRENCY ?? 6),
-    total: Number(process.env.MEMORY_MODEL_CONCURRENCY ?? 6),
-    highWater: Number(process.env.MEMORY_STAGE2_HIGH_WATER ?? 1000),
+    stage1: Number(process.env.MEMORY_STAGE1_CONCURRENCY ?? defaultPipelineConfig.stage1),
+    stage2: Number(process.env.MEMORY_STAGE2_CONCURRENCY ?? defaultPipelineConfig.stage2),
+    total: Number(process.env.MEMORY_MODEL_CONCURRENCY ?? defaultPipelineConfig.total),
+    highWater: Number(process.env.MEMORY_STAGE2_HIGH_WATER ?? defaultPipelineConfig.highWater),
   },
 });
 await app.listen({
