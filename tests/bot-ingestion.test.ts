@@ -19,7 +19,8 @@ const model: ChatModel = {
 
 it('accepts keyless bot history, publishes a Wiki, updates its display name and keeps read authorization', async () => {
   const project = await createProject(pool, 'keyless-history');
-  const app = await buildApp({ pool, model, botUploadProject: project.project_id });
+  const catscoRead = { token: 'test-catsco-reader', sourceBindings: {} };
+  const app = await buildApp({ pool, model, botUploadProject: project.project_id, catscoRead });
   await app.ready();
   const headers = { authorization: 'Bearer ' + project.key };
   const response = await app.inject({ url: '/v1/bot-ingest/config' });
@@ -35,6 +36,15 @@ it('accepts keyless bot history, publishes a Wiki, updates its display name and 
     expect(uploaded.statusCode).toBe(200);
     const ack = uploaded.json();
     await vi.waitFor(async () => expect((await pool.query('select count(*)::int n from memory_documents where project_id=$1', [project.project_id])).rows[0].n).toBe(1), { timeout: 10000 });
+    const catalog = await app.inject({
+      method: 'POST', url: '/internal/catsco/memory/catalog',
+      headers: { authorization: 'Bearer ' + catscoRead.token },
+      payload: { scope: { kind: 'owner', bot_uid: '365' } },
+    });
+    expect(catalog.statusCode).toBe(200);
+    expect(catalog.json().items).toEqual([expect.objectContaining({
+      title: 'Bot 上传记录', conversation_ids: [expect.stringMatching(/^source:/)],
+    })]);
     const renamed = await app.inject({ method: 'POST', url: '/v1/bots/365/ingest/batches', payload: { ...body, bot_name: 'Saturday renamed' } });
     expect(renamed.json()).toEqual(ack);
     expect((await pool.query('select count(*)::int n from raw_records where project_id=$1', [project.project_id])).rows[0].n).toBe(1);

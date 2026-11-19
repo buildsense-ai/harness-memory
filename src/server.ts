@@ -3,6 +3,7 @@ import { migrate } from "./db/migrate.js";
 import { buildApp } from "./app.js";
 import { configuredModel } from "./extraction/model.js";
 import { defaultPipelineConfig } from "./extraction/memory-runner.js";
+import { parseCatscoSourceBindings } from './catsco-memory.js';
 const pool = createPool();
 await migrate(pool);
 await pool.query(
@@ -12,6 +13,10 @@ const app = await buildApp({
   pool,
   model: configuredModel(),
   botUploadProject: process.env.MEMORY_BOT_PROJECT_ID,
+  catscoRead: process.env.MEMORY_CATSCO_READ_TOKEN ? {
+    token: process.env.MEMORY_CATSCO_READ_TOKEN,
+    sourceBindings: parseCatscoSourceBindings(process.env.MEMORY_CATSCO_SOURCE_BINDINGS),
+  } : undefined,
   budget: Number(process.env.MODEL_INPUT_BUDGET ?? 65536),
   pipeline: {
     stage1: Number(process.env.MEMORY_STAGE1_CONCURRENCY ?? defaultPipelineConfig.stage1),
