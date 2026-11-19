@@ -1,4 +1,4 @@
-# Public upload-only ingress. Both names use one SAN certificate.
+# Public upload ingress. Both names use one SAN certificate.
 # Keep the application on loopback and retain any existing internal ingress.
 server {
     listen 18443 ssl;
@@ -32,6 +32,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 120s;
     }
+
+    include /etc/nginx/snippets/memory-catsco-read*.conf;
 
     location / { return 404; }
 }
