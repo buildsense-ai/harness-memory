@@ -165,7 +165,9 @@ export function registerCatscoMemory(
         from raw_records raw
         join events e on (e.project_id, e.raw_id) = (raw.project_id, raw.id)
         join episode_events ee on (ee.project_id, ee.event_id) = (e.project_id, e.id)
-        where raw.project_id = $1 and raw.metadata->>'session_id' = any($9::text[])
+        where raw.project_id = $1
+          and left(raw.metadata->>'session_id', 128) = any($9::text[])
+          and raw.metadata->>'session_id' = any($9::text[])
       ),`;
     const { rows } = await pool.query(`
       ${matchingEpisodes || 'with'} page as materialized (

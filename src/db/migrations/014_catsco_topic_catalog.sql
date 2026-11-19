@@ -1,5 +1,5 @@
 CREATE INDEX IF NOT EXISTS raw_records_session_lookup
-  ON raw_records(project_id, (metadata->>'session_id'));
+  ON raw_records(project_id, (left(metadata->>'session_id', 128)));
 
 CREATE INDEX IF NOT EXISTS episode_events_event_lookup
   ON episode_events(event_id);
