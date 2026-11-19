@@ -19,7 +19,7 @@ const model: ChatModel = {
 
 it('accepts keyless bot history, publishes a Wiki, updates its display name and keeps read authorization', async () => {
   const project = await createProject(pool, 'keyless-history');
-  const catscoRead = { token: 'test-catsco-reader', sourceBindings: {} };
+  const catscoRead = { token: 'test-catsco-reader' };
   const app = await buildApp({ pool, model, botUploadProject: project.project_id, catscoRead });
   await app.ready();
   const headers = { authorization: 'Bearer ' + project.key };
@@ -39,11 +39,11 @@ it('accepts keyless bot history, publishes a Wiki, updates its display name and 
     const catalog = await app.inject({
       method: 'POST', url: '/internal/catsco/memory/catalog',
       headers: { authorization: 'Bearer ' + catscoRead.token },
-      payload: { scope: { kind: 'owner', bot_uid: '365' } },
+      payload: {},
     });
     expect(catalog.statusCode).toBe(200);
     expect(catalog.json().items).toEqual([expect.objectContaining({
-      title: 'Bot 上传记录', conversation_ids: [expect.stringMatching(/^source:/)],
+      title: 'Bot 上传记录', bot_uid: '365', topic_id: null,
     })]);
     const renamed = await app.inject({ method: 'POST', url: '/v1/bots/365/ingest/batches', payload: { ...body, bot_name: 'Saturday renamed' } });
     expect(renamed.json()).toEqual(ack);

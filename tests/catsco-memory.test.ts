@@ -8,28 +8,28 @@ import { createProject } from '../src/db/projects.js';
 
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
 const token = 'catsco-service-test-token';
-const verified = 'bot:365:verified';
+const sourceID = 'bot:365:source';
 const other = 'bot:365:other';
 const direct = 'p2p_7_365';
 const group = 'grp_80';
 const owner = { kind: 'owner', bot_uid: '365' };
-const member = (topic_ids: string[]) => ({ kind: 'topics', bot_uid: '365', topic_ids });
-const sourceBindings = { [verified]: '2026-11-19T03:00:00Z' };
 let app: FastifyInstance, project: string, projectKey: string;
 const docs: Record<string, string> = {};
 
 type Origin = { session: string; source?: string; when?: string | null; batchOnly?: boolean };
 async function document(title: string, created: string, origins: Origin[], p = project) {
   const run = ref('run'), episode = ref('ep'), id = ref('mem');
-  const source = origins[0].source ?? verified;
+  const source = origins[0].source ?? sourceID;
   const sessionKey = 'catscompany/fixture.jsonl';
   const rawIds = [];
+  const events = [];
   await pool.query("insert into extraction_runs(id,project_id,status,input_refs,source_id,session_key) values($1,$2,'completed','[]',$3,$4)", [run, p, source, sessionKey]);
   await pool.query("insert into episodes(id,project_id,run_id,goal,chunk_id) values($1,$2,$3,'{}','fixture')", [episode, p, run]);
   for (const [index, origin] of origins.entries()) {
     const raw = ref('raw'), event = ref('evt'), stream = ref('stream');
     rawIds.push(raw);
-    const source = origin.source ?? verified;
+    const source = origin.source ?? sourceID;
+    events.push(event);
     await pool.query("insert into streams(project_id,source_id,stream_id,harness) values($1,$2,$3,'xiaoba')", [p, source, stream]);
     await pool.query(`
       insert into raw_records(id,project_id,source_id,stream_id,offset_bytes,raw,hash,metadata,received_at)
@@ -43,6 +43,7 @@ async function document(title: string, created: string, origins: Origin[], p = p
       await pool.query('insert into episode_events(project_id,episode_id,event_id,ordinal) values($1,$2,$3,$4)', [p, episode, event, index]);
     }
   }
+  await pool.query("update extraction_runs set input_refs=$1 where project_id=$2 and id=$3", [JSON.stringify(events), p, run]);
   await pool.query(`
     insert into ingestion_episodes(project_id,source_id,episode_key,session_key,lane,logical_day,raw_ids,run_id)
     values ($1,$2,$3,$4,'incremental','2026-11-19',$5,$6)`, [p, source, episode, sessionKey, JSON.stringify(rawIds), run]);
@@ -73,8 +74,10 @@ beforeAll(async () => {
   docs.partition = await document('Selected from a mixed batch', '2026-11-19T02:00:00Z', [
     { session: direct }, { session: group, batchOnly: true },
   ]);
+  docs.otherBot = await document('Different Bot', '2026-11-19T08:00:00Z', [{ session: group, source: 'bot:573:other' }]);
+  docs.conflicting = await document('Unclear Bot', '2026-11-19T09:00:00Z', [{ session: group }, { session: group, source: 'bot:573:other' }]);
   docs.separate = await document('Different project', '2026-11-19T06:00:00Z', [{ session: direct }], separate);
-  app = await buildApp({ pool, botUploadProject: project, catscoRead: { token, sourceBindings } });
+  app = await buildApp({ pool, botUploadProject: project, catscoRead: { token } });
 }, 20000);
 afterAll(async () => { await app?.close(); await pool.end(); });
 
@@ -85,42 +88,36 @@ function query(path: 'catalog' | 'wiki', payload: object, extraHeaders: Record<s
   });
 }
 
-it('limits the directory by project, bot, verified sources and every conversation before paging', async () => {
-  const allowed = await query('catalog', { scope: member([direct]), topic_id: direct, limit: 1 });
-  expect(allowed.statusCode).toBe(200);
-  expect(allowed.json()).toEqual({
-    items: [{ id: docs.direct, title: 'Private', conversation_ids: [direct],
-      revision: expect.any(String), created_at: '2026-11-19T01:00:00.000123Z' }],
-    next_cursor: null,
-  });
-  const ownerDirectory = await query('catalog', { scope: owner });
-  expect(ownerDirectory.statusCode).toBe(200);
-  expect(ownerDirectory.json().items.map((item: { id: string }) => item.id)).toEqual(
-    [docs.undated, docs.newer, docs.unverified, docs.unknown, docs.multi, docs.partition, docs.direct, docs.group]);
-  expect((await query('catalog', { scope: { ...owner, bot_uid: '573' } })).json().items).toEqual([]);
-  const fullScope = member([direct, group]);
-  const first = await query('catalog', { scope: fullScope, limit: 3 });
-  expect(first.json().items[1]).toMatchObject({ id: docs.partition, conversation_ids: [direct] });
-  const second = await query('catalog', { scope: fullScope, cursor: first.json().next_cursor, limit: 3 });
-  expect(second.json().items.map((item: { id: string }) => item.id)).toEqual([docs.group]);
-  expect((await query('catalog', { scope: member([direct]), cursor: first.json().next_cursor })).statusCode).toBe(400);
-  expect((await query('catalog', { scope: member([direct]), topic_id: group })).statusCode).toBe(404);
+it('pages over the existing project and exports Bot and full run topic attribution', async () => {
+  const first = await query('catalog', { limit: 1 });
+  expect(first.statusCode).toBe(200);
+  expect(first.json().items).toEqual([]);
+  expect(first.json().next_cursor).toEqual(expect.any(String));
+  const rest = await query('catalog', { cursor: first.json().next_cursor });
+  expect(rest.json()).toMatchObject({ items: [
+    { id: docs.otherBot, bot_uid: '573', topic_id: group },
+    { id: docs.undated, bot_uid: '365', topic_id: direct },
+    { id: docs.newer, bot_uid: '365', topic_id: direct },
+    { id: docs.unverified, bot_uid: '365', topic_id: direct },
+    { id: docs.unknown, bot_uid: '365', topic_id: null },
+    { id: docs.multi, bot_uid: '365', topic_id: null },
+    { id: docs.partition, bot_uid: '365', topic_id: null },
+    { id: docs.direct, bot_uid: '365', topic_id: direct, title: 'Private', created_at: '2026-11-19T01:00:00.000123Z' },
+    { id: docs.group, bot_uid: '365', topic_id: group },
+  ], next_cursor: null });
+  expect(rest.json().items.every((item: Record<string, unknown>) => !('markdown' in item))).toBe(true);
+  expect((await query('catalog', { scope: owner })).statusCode).toBe(400);
 });
 
 it('authorizes before reading a Wiki or returning 304', async () => {
-  const opened = await query('wiki', { scope: member([direct]), id: docs.direct });
+  const opened = await query('wiki', { id: docs.direct });
   expect(opened.statusCode).toBe(200);
   expect(opened.json()).toMatchObject({ id: docs.direct, markdown: '# Private\n\nWiki body.', source_refs: [expect.any(String)] });
   const etag = opened.headers.etag!;
-  const cached = await query('wiki', { scope: member([direct]), id: docs.direct }, { 'if-none-match': etag });
+  const cached = await query('wiki', { id: docs.direct }, { 'if-none-match': etag });
   expect(cached.statusCode).toBe(304);
   expect(cached.body).toBe('');
-  const revoked = await query('wiki', { scope: member([group]), id: docs.direct }, { 'if-none-match': etag });
-  expect(revoked.statusCode).toBe(404);
-  expect(revoked.headers.etag).toBeUndefined();
-  expect((await query('wiki', { scope: owner, id: docs.separate })).statusCode).toBe(404);
-  expect((await query('wiki', { scope: member([direct]), id: docs.multi })).statusCode).toBe(404);
-  expect((await query('wiki', { scope: member([direct]), id: docs.partition })).statusCode).toBe(404);
-  expect((await query('wiki', { scope: member([direct]), id: docs.undated })).statusCode).toBe(404);
-  expect((await query('wiki', { scope: owner, id: docs.direct }, { authorization: 'Bearer ' + projectKey })).statusCode).toBe(401);
+  expect((await query('wiki', { scope: owner, id: docs.direct }, { 'if-none-match': etag })).statusCode).toBe(400);
+  expect((await query('wiki', { id: docs.separate })).statusCode).toBe(404);
+  expect((await query('wiki', { id: docs.direct }, { authorization: 'Bearer ' + projectKey, 'if-none-match': etag })).statusCode).toBe(401);
 });
