@@ -26,6 +26,10 @@ node --env-file=.env dist/src/server.js
 
 Copy `.env.example` to `.env` and configure `DATABASE_URL`. Model variables are optional for upload/read, required for extraction. The service binds to `127.0.0.1:8460`. Monday's public ingress proxies only the keyless Bot config/upload routes; authorized search, workbench and original reads remain on the private application endpoint. The shared pipeline uses tokenizer-based context/output limits, 200K Stage1 and 880K Stage2 request targets by default. `MODEL_INPUT_BUDGET` applies to the legacy extraction path. See [full-history pipeline](docs/full-history-pipeline.md) for the automatic uploader, budgets, concurrency and deployment settings.
 
+To enable the Cats Company chat Wiki sidebar, set a dedicated `MEMORY_CATSCO_READ_TOKEN` and make `/internal/catsco/memory/{catalog,wiki}` reachable from the Cats Company backend over the private connection. The reader queries published Wiki documents and their existing Episode and intake metadata in `MEMORY_BOT_PROJECT_ID`. Cats Company supplies the viewer's current scope.
+
+`MEMORY_CATSCO_SOURCE_BINDINGS` is an optional JSON object mapping an independently verified uploader source to the end of its verified snapshot, for example `{"bot:365:managed_source":"2026-11-19T03:00:00Z"}`. Bot owners can browse their bot's Wiki directory. Ordinary members can browse automatic intake batches whose source is verified and whose conversations they can read. Set or advance the cutoff using evidence from the managed uploader. The setting defaults to an empty map and is independent of upload requests.
+
 Automatic Bot uploads require no client memory key or project configuration. `/v1/bot-ingest/config` provides the dataset; `/v1/bots/{uid}/ingest/{manifests,batches,fragments}` accepts logs. `MEMORY_BOT_PROJECT_ID` selects their server-owned workspace. UID declares provenance, not authentication. Names update on upload without rewriting originals. The manual single-file uploader below continues using project authorization.
 
 Save the returned project Key in a private local connector file, e.g. `connector.local.json`:
