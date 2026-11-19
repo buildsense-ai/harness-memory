@@ -5,7 +5,7 @@ import { registerManifest } from './ingestion/manifests.js';
 import { isObject } from './extraction/output.js';
 import { ingestFragment } from './record-fragments.js';
 import { registerBotIngestion } from './bot-ingestion.js';
-import { registerCatscoMemory } from './catsco-memory.js';
+import { registerCatscoMemory, type CatscoSourceBindings } from './catsco-memory.js';
 import type { PipelineConfig } from './extraction/memory-runner.js';
 import Fastify from "fastify";
 import type { Pool } from "pg";
@@ -39,7 +39,7 @@ export async function buildApp({
   budget?: number;
   pipeline?: Partial<PipelineConfig>;
   botUploadProject?: string;
-  catscoRead?: { token: string; sourceBindings: Record<string, string> };
+  catscoRead?: { token: string; sourceBindings: CatscoSourceBindings };
 }) {
   const app = Fastify({ bodyLimit: 4 * 1024 * 1024, logger: false });
   app.get("/workbench", async (_request, reply) => reply.type("text/html; charset=utf-8").send(WORKBENCH_HTML));

@@ -5,6 +5,7 @@ import { buildApp } from '../src/app.js';
 import { ref } from '../src/contracts.js';
 import { migrate } from '../src/db/migrate.js';
 import { createProject } from '../src/db/projects.js';
+import { parseCatscoSourceBindings } from '../src/catsco-memory.js';
 
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
 const token = 'catsco-service-test-token';
@@ -98,6 +99,9 @@ it('limits the directory by project, bot, verified sources and every conversatio
   expect(ownerDirectory.json().items.map((item: { id: string }) => item.id)).toEqual(
     [docs.undated, docs.newer, docs.unverified, docs.unknown, docs.multi, docs.partition, docs.direct, docs.group]);
   expect((await query('catalog', { scope: { ...owner, bot_uid: '573' } })).json().items).toEqual([]);
+  const ownerTopic = await query('catalog', { scope: owner, topic_id: group });
+  expect(ownerTopic.statusCode).toBe(200);
+  expect(ownerTopic.json().items.map((item: { id: string }) => item.id)).toEqual([docs.multi, docs.group]);
   const fullScope = member([direct, group]);
   const first = await query('catalog', { scope: fullScope, limit: 3 });
   expect(first.json().items[1]).toMatchObject({ id: docs.partition, conversation_ids: [direct] });
@@ -105,6 +109,27 @@ it('limits the directory by project, bot, verified sources and every conversatio
   expect(second.json().items.map((item: { id: string }) => item.id)).toEqual([docs.group]);
   expect((await query('catalog', { scope: member([direct]), cursor: first.json().next_cursor })).statusCode).toBe(400);
   expect((await query('catalog', { scope: member([direct]), topic_id: group })).statusCode).toBe(404);
+});
+
+it('shows verified history for one conversation without trusting adjacent conversations or later uploads', async () => {
+  const sourceBindings = parseCatscoSourceBindings(JSON.stringify({ [verified]: { [direct]: '2026-11-19T03:00:00Z' } }));
+  const scoped = await buildApp({ pool, botUploadProject: project, catscoRead: { token, sourceBindings } });
+  const read = (path: 'catalog' | 'wiki', payload: object) => scoped.inject({
+    method: 'POST', url: '/internal/catsco/memory/' + path, payload,
+    headers: { authorization: 'Bearer ' + token },
+  });
+  try {
+    const scope = member([direct, group]);
+    const catalog = await read('catalog', { scope });
+    expect(catalog.statusCode).toBe(200);
+    expect(catalog.json().items.map((item: { id: string }) => item.id)).toEqual([docs.direct]);
+    expect((await read('wiki', { scope, id: docs.direct })).statusCode).toBe(200);
+    expect((await read('wiki', { scope, id: docs.group })).statusCode).toBe(404);
+    expect((await read('wiki', { scope, id: docs.partition })).statusCode).toBe(404);
+    expect((await read('wiki', { scope, id: docs.newer })).statusCode).toBe(404);
+  } finally {
+    await scoped.close();
+  }
 });
 
 it('authorizes before reading a Wiki or returning 304', async () => {

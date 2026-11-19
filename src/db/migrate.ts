@@ -18,6 +18,7 @@ export async function migrate(pool: Pool) {
     await c.query(await readFile("src/db/migrations/011_episode_indexes.sql", "utf8"));
     await c.query(await readFile("src/db/migrations/012_ingestion_bots.sql", "utf8"));
     await c.query(await readFile("src/db/migrations/013_ingestion_episode_read_index.sql", "utf8"));
+    await c.query(await readFile("src/db/migrations/014_catsco_topic_catalog.sql", "utf8"));
     await c.query("COMMIT");
   } catch (e) {
     await c.query("ROLLBACK");
