@@ -17,18 +17,18 @@ it("reports missing Markdown and unexpected fields together without manufacturin
   expect(value.arguments.markdown).toBe("# 任务\n\n实际正文");
 });
 
-it("keeps optional sections optional and ignores headings quoted inside code blocks", () => {
-  const markdown = '# 历史\n\n## 发生了什么\n具体过程。\n\n```md\n## arbitrary\n## source_refs\n```\n';
-  expect(validateMemoryDocument({ markdown })).toEqual({ markdown, headings: ["发生了什么"] });
+it("accepts focused Markdown sections and ignores headings quoted inside code blocks", () => {
+  const markdown = '# 历史\n\n## 回退触发条件\n只有流式参数错误才回退。\n\n```md\n## arbitrary\n## source_refs\n```\n';
+  expect(validateMemoryDocument({ markdown })).toEqual({ markdown, headings: ["回退触发条件"] });
   expect(validateMemoryDocument({ markdown: "# 记录\n\n只有一段实际内容。" }).markdown).toContain("实际内容");
 });
 
-it("reports duplicate/unknown sections, extra titles and model-generated refs together", () => {
-  const markdown = '# 历史\n实际内容\n## 背景\n背景\n## 背景\n重复\n## 其他\n错误章节\n# 第二份\n## source_refs\n伪造引用';
+it("reports duplicate sections, extra titles and model-generated refs together", () => {
+  const markdown = '# 历史\n实际内容\n## 验收\n结果\n## 验收\n重复\n# 第二份\n## source_refs\n伪造引用';
   try { validateMemoryDocument({ markdown }); throw Error("accepted invalid document"); }
   catch (error) {
     expect((error as OutputValidationError).issues.map(i => i.code)).toEqual(expect.arrayContaining([
-      "duplicate_h2", "unexpected_h2", "multiple_markdown_titles", "model_generated_source_refs",
+      "duplicate_h2", "multiple_markdown_titles", "model_generated_source_refs",
     ]));
   }
 });
@@ -39,12 +39,12 @@ it.each([null, [], {}, { markdown: 1 }, { markdown: "# 空标题之外没有正�
 
 it("can send all Stage 2 format errors back as tool feedback and validate the corrected Markdown unchanged", () => {
   const completion = (args: string) => ({ choices: [{ finish_reason: "tool_calls", message: { role: "assistant", content: null, tool_calls: [{ id: "doc", type: "function", function: { name: "submit_memory_document", arguments: args } }] } }] });
-  const data = completion(JSON.stringify({ markdown: "# 旧正文\n\n## 其他\n错误\n## source_refs\n不该生成", extra: true }));
+  const data = completion(JSON.stringify({ markdown: "# 旧正文\n\n# 第二份\n错误\n## source_refs\n不该生成", extra: true }));
   const messages: any[] = [];
   try { validateMemoryDocument(readToolOutput(data, "submit_memory_document")); throw Error("accepted"); }
   catch (error) { appendOutputRetry(messages, data.choices[0].message, error, "submit_memory_document"); }
   const feedback = JSON.parse(messages[1].content);
-  expect(feedback.issues.map((i: any) => i.code)).toEqual(expect.arrayContaining(["schema_additionalProperties", "unexpected_h2", "model_generated_source_refs"]));
+  expect(feedback.issues.map((i: any) => i.code)).toEqual(expect.arrayContaining(["schema_additionalProperties", "multiple_markdown_titles", "model_generated_source_refs"]));
   const markdown = "# 修正后的历史\n\n## 发生了什么\n完整实际正文。";
   expect(validateMemoryDocument(readToolOutput(completion(JSON.stringify({ markdown })), "submit_memory_document")).markdown).toBe(markdown);
 });

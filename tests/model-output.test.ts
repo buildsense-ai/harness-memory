@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { CompatibleChatModel } from "../src/extraction/model.js";
-import type { StoredEvent } from "../src/contracts.js";
+import type { StoredEvent, TaskThread } from "../src/contracts.js";
 import { OutputValidationError, appendOutputRetry, outputFeedback, readToolOutput } from "../src/extraction/output.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -16,6 +16,24 @@ const completion = (value: unknown) => ({ choices: [{ finish_reason: "tool_calls
   role: "assistant", content: null, tool_calls: [{ id: "output-1", type: "function", function: { name: "submit_task_partition", arguments: JSON.stringify(value) } }],
 } }] });
 const model = () => new CompatibleChatModel({ baseUrl: "https://model.invalid/v1", key: "test", model: "test", maxOutputTokens: 60000 });
+
+it("uses high effort for Wiki generation and passes the Episode's tool evidence through", async () => {
+  const thread: TaskThread = good.task_threads[0];
+  const evidence: StoredEvent = { ...events[0], ref: "evt_result", kind: "tool_result", text: "replay passed" };
+  const markdown = "# 修复分页跳位\n\n相机锚定会话 ID。\n\n## 验收\n模拟分页和拖动通过。";
+  vi.stubGlobal("fetch", vi.fn(async (_url, options: RequestInit) => {
+    expect(typeof options.body).toBe("string");
+    const request = JSON.parse(String(options.body));
+    expect(request.reasoning_effort).toBe("high");
+    expect(JSON.parse(request.messages[1].content).candidate_events).toContainEqual(expect.objectContaining({
+      ref: evidence.ref, kind: "tool_result", text: evidence.text,
+    }));
+    const data = completion({ markdown });
+    data.choices[0].message.tool_calls[0].function.name = "submit_memory_document";
+    return Response.json(data);
+  }));
+  expect(await model().memory(thread, [], [...events, evidence])).toEqual({ markdown });
+});
 
 it("returns every bad query ID and missing anchor in one tool error, then accepts the model's complete correction", async () => {
   const bad = structuredClone(good);
