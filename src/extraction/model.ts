@@ -391,7 +391,7 @@ export class CompatibleChatModel implements ChatModel {
     return this.tokenBudget.count(JSON.stringify({ messages: [{ role: 'system', content: sourcePrompt(prompt) }, { role: 'user', content: JSON.stringify(payload) }], tools: [tool] })) + 2048;
   }
 
-  private async ask<T>(payload: unknown, prompt: string, tool: any, validate: (value: T) => void): Promise<T> {
+  private async ask<T>(payload: unknown, prompt: string, tool: any, validate: (value: T) => void, effort: "max" | "high" = "max"): Promise<T> {
     const messages: any[] = [
       { role: "system", content: sourcePrompt(prompt) },
       { role: "user", content: JSON.stringify(payload) },
@@ -402,7 +402,7 @@ export class CompatibleChatModel implements ChatModel {
       const response = await fetchModel(this.config.baseUrl.replace(/\/$/, "") + "/chat/completions", {
         method: "POST",
         headers: { authorization: "Bearer " + this.config.key, "content-type": "application/json" },
-        body: JSON.stringify({ model: this.config.model, thinking: { type: "enabled" }, reasoning_effort: "max", messages, tools: [tool], max_tokens: this.config.maxOutputTokens }),
+        body: JSON.stringify({ model: this.config.model, thinking: { type: "enabled" }, reasoning_effort: effort, messages, tools: [tool], max_tokens: this.config.maxOutputTokens }),
         signal: AbortSignal.timeout(900000),
       });
       const data = (await response.json()) as any;
@@ -432,7 +432,7 @@ export class CompatibleChatModel implements ChatModel {
   }
 
   async memory(thread: TaskThread, assignments: QueryAssignment[], events: StoredEvent[]) {
-    return this.ask<{ markdown: string }>({ task_thread: thread, query_assignments: assignments, candidate_events: inputView(events) }, memoryGenerationPrompt, memoryTool, value => { validateMemoryDocument(value); });
+    return this.ask<{ markdown: string }>({ task_thread: thread, query_assignments: assignments, candidate_events: inputView(events) }, memoryGenerationPrompt, memoryTool, value => { validateMemoryDocument(value); }, "high");
   }
 
   async select(thread: TaskThread, assignments: QueryAssignment[], events: StoredEvent[]) {
