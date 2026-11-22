@@ -13,6 +13,10 @@ The default client endpoints are `https://memory.catsco.cn:18443` and `https://m
 
 Do not change `MEMORY_DATASET_ID` or clear client/server progress for this ingress change. XiaoBa PR 651 preserves the independent local ledger when its endpoint changes, checking the receiver dataset first. Existing installations with an explicit internal URL keep that override until intentionally migrated.
 
+## Optional Bot memory reads
+
+To enable the three authenticated Bot memory routes over HTTPS, install `deploy/nginx-memory-bot-read.conf.example` as `/etc/nginx/snippets/memory-bot-read.conf` and add the matching include to the HTTPS server block. Validate with `nginx -t` before reloading. See [Bot memory API](api.md#bot-memory-for-branch).
+
 ## Fallback
 
 The client tries `.cc` on connection/timeouts or HTTP 502/503/504 and verifies its dataset before sending original bytes. Identical source IDs, stream IDs, manifests and offsets reach the same backend, so the existing replay handling applies. HTTP request errors, 429, malformed responses and dataset mismatches stop that operation. TLS verification remains enabled on every connection. There is no HTTP fallback and no duplicate queue per domain.

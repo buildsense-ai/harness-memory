@@ -47,6 +47,24 @@ XiaoBa `entry_type:"turn"` records with an ordered `messages` array, native `rol
 
 ## Markdown search
 
+### Bot memory for Branch
+
+Send `Authorization: Bearer <token>` with each request. The server looks up the Bot UID in the configured Bot upload project. One active token per Bot covers its stored conversation memories in that project. The UID is a public identifier. Store the read token in the XiaoBa runtime configuration and keep it in the HTTP client. This API is for trusted runtimes that may read the Bot's full corpus. User-facing chat access needs its own conversation permissions.
+
+| Route | Request | Response |
+|---|---|---|
+| `POST /v1/bot-memory/search` | `{"keywords":["图谱","分页","锚点"]}` | `{retrieval_id,items,has_more}`. Ranks 1–10 have `wiki_id`, `title`, `snippet`, and `matched_keywords`. Ranks 11–30 have `wiki_id` and `title`. |
+| `GET /v1/bot-memory/wikis/:id` | Wiki ID in the path | `{wiki_id,markdown,source_refs}` with complete Markdown and its Episode reference. Use the same route to follow a linked Wiki within the Bot's scope. |
+| `POST /v1/bot-memory/wikis/:id/source` | `{"ref":"ep_UUID","offset":0,"limit":20}` | A page of original events from the Wiki's own Episode in source order. Follow `next_offset` until it is null. |
+
+Search uses literal OR over 1–16 keywords, with ASCII case folding and keyword deduplication. Results have one entry per Wiki, ordered by the number of distinct matching terms, the number of matching title terms, newest publication, then Wiki ID. The retrieval record stores the ordered IDs returned, including title-only results. Branch reads and delivery to the parent Agent can be recorded separately by the runtime.
+
+Unknown or foreign Wikis and mismatched Episode references return 404. Missing, invalid, or revoked tokens return 401. Records without a Bot-attributed extraction run are excluded. Provenance in current keyless uploads is declared by the uploader.
+
+After the Bot upload project exists, run `npm run admin -- bot-memory-key-issue 365` on the memory host with the service's database configuration. The command prints the new token and replaces any previous token for that Bot. Run `npm run admin -- bot-memory-key-revoke 365` to revoke it. The server stores only the token hash. Remote clients use HTTPS through the optional Bot read ingress in [Public upload ingress](public-upload.md#optional-bot-memory-reads).
+
+### Project-key search
+
 `POST /v1/memories/search` requires the same Bearer Key used to upload the source logs. This first version preserves one Key per project: other Keys' data, even with identical source names or known references, is inaccessible.
 
 ```json

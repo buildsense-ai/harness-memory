@@ -34,6 +34,7 @@ server {
     }
 
     include /etc/nginx/snippets/memory-catsco-read*.conf;
+    include /etc/nginx/snippets/memory-bot-read*.conf;
 
     location / { return 404; }
 }
