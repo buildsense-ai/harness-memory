@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { Pool } from 'pg';
 import { buildApp } from '../src/app.js';
 import { ref } from '../src/contracts.js';
-import { issueBotMemoryKey, revokeBotMemoryKey } from '../src/db/bot-memory-keys.js';
+import { HttpError } from '../src/contracts.js';
 import { migrate } from '../src/db/migrate.js';
 import { createProject } from '../src/db/projects.js';
 
@@ -13,7 +13,11 @@ let project: Awaited<ReturnType<typeof createProject>>;
 beforeAll(async () => {
   await migrate(pool);
   project = await createProject(pool, 'bot memory reader fixture');
-  app = await buildApp({ pool, botUploadProject: project.project_id });
+  app = await buildApp({ pool, botUploadProject: project.project_id, identifyBot: async credential => {
+    const uid = { 'ApiKey fixture-365': '365', 'ApiKey fixture-101': '101' }[credential];
+    if (!uid) throw new HttpError(401, 'invalid Bot credential');
+    return uid;
+  } });
 });
 afterAll(async () => {
   await app?.close();
@@ -40,12 +44,11 @@ async function wiki(bot: string | null, markdown: string, date: string, withSour
   return { mem, episode };
 }
 
-const bearer = (token: string) => ({ authorization: 'Bearer ' + token });
+const botHeaders = (uid: string) => ({ authorization: 'ApiKey fixture-' + uid, 'x-bot-uid': uid });
 const search = '/v1/bot-memory/search';
 const page = (id: string) => '/v1/bot-memory/wikis/' + id;
 
-it('ranks distinct OR hits, serves ten excerpts plus twenty IDs, and records the exact scoped list', async () => {
-  const { token } = await issueBotMemoryKey(pool, project.project_id, '365');
+it('ranks distinct OR hits, serves ten excerpts plus twenty IDs, and returns a retrieval ID', async () => {
   const hits = await Promise.all([
     wiki('365', '# 分页锚点\n\n一个带条件的稳定方案。', '2026-01-02'),
     wiki('365', '# 分页\n\n先确认版本。这里明确说明锚点如何恢复。', '2026-01-03'),
@@ -58,7 +61,7 @@ it('ranks distinct OR hits, serves ten excerpts plus twenty IDs, and records the
   for (let i = 0; i < 28; i++) {
     await wiki('365', '# 通用案例 ' + i + '\n\n分页。', '2026-01-01');
   }
-  const response = await app.inject({ method: 'POST', url: search, headers: bearer(token), payload: { keywords: [' 分页 ', '锚点', '分页'] } });
+  const response = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: [' 分页 ', '锚点', '分页'] } });
   expect(response.statusCode).toBe(200);
   const { items, has_more, retrieval_id } = response.json();
   expect(items).toHaveLength(30);
@@ -68,22 +71,20 @@ it('ranks distinct OR hits, serves ten excerpts plus twenty IDs, and records the
   expect(items[2].snippet).toContain('分页与锚点同时出现');
   expect(items.slice(0, 10).every((item: { snippet?: string }) => item.snippet)).toBe(true);
   expect(Object.keys(items[10]).sort()).toEqual(['title', 'wiki_id']);
-  const { rows: [receipt] } = await pool.query('select bot_uid,wiki_ids from bot_memory_retrievals where id=$1', [retrieval_id]);
-  expect(receipt).toEqual({ bot_uid: '365', wiki_ids: items.map((item: { wiki_id: string }) => item.wiki_id) });
-  const noHits = await app.inject({ method: 'POST', url: search, headers: bearer(token), payload: { keywords: ['no exact hit'] } });
+  expect(retrieval_id).toMatch(/^ret_/);
+  const noHits = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['no exact hit'] } });
   expect(noHits.json()).toMatchObject({ items: [], has_more: false });
   for (const payload of [{ keywords: ['分页'], bot_uid: '36' }, { keywords: ['分页'], operator: 'AND' }]) {
-    expect((await app.inject({ method: 'POST', url: search, headers: bearer(token), payload })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload })).statusCode).toBe(400);
   }
 });
 
-it('requires a dedicated token and pins full Wiki and Episode reads to the same Bot and Wiki', async () => {
+it('verifies the existing Bot credential and pins full Wiki and Episode reads to the same Bot and Wiki', async () => {
   const a = await wiki('101', '# Retry\n\nConnection details.', '2026-01-02', true);
   const b = await wiki('102', '# Retry\n\nPrivate to a different Bot.', '2026-01-03', true);
   const otherEpisode = await wiki('101', '# Retry with a different source\n\nOther history.', '2026-01-04', true);
-  const { token } = await issueBotMemoryKey(pool, project.project_id, '101');
-  const headers = bearer(token);
-  for (const denied of [undefined, bearer('101'), bearer(project.key)]) {
+  const headers = botHeaders('101');
+  for (const denied of [undefined, { 'x-bot-uid': '101' }, botHeaders('999')]) {
     expect((await app.inject({ method: 'POST', url: search, headers: denied, payload: { keywords: ['retry'] } })).statusCode).toBe(401);
   }
   expect((await app.inject({ url: '/v1/memories/' + a.mem, headers })).statusCode).toBe(401);
@@ -101,9 +102,5 @@ it('requires a dedicated token and pins full Wiki and Episode reads to the same 
   expect(firstPage.json()).toMatchObject({ ref: a.episode, events: [{ content: 'What happens on retry?' }], next_offset: 1 });
   const nextPage = await app.inject({ method: 'POST', url: page(a.mem) + '/source', headers, payload: { ref: a.episode, offset: 1, limit: 1 } });
   expect(nextPage.json()).toMatchObject({ events: [{ content: 'The connection closes.' }], next_offset: null });
-  const renewed = await issueBotMemoryKey(pool, project.project_id, '101');
-  expect((await app.inject({ url: page(a.mem), headers })).statusCode).toBe(401);
-  expect((await app.inject({ url: page(a.mem), headers: bearer(renewed.token) })).statusCode).toBe(200);
-  await revokeBotMemoryKey(pool, project.project_id, '101');
-  expect((await app.inject({ url: page(a.mem), headers: bearer(renewed.token) })).statusCode).toBe(401);
+  expect((await app.inject({ url: page(b.mem), headers: { ...headers, 'x-bot-uid': '102' } })).statusCode).toBe(403);
 });

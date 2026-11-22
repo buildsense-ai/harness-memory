@@ -2,7 +2,6 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { Pool } from 'pg';
 import { migrate } from '../src/db/migrate.js';
 import { createProject } from '../src/db/projects.js';
-import { issueBotMemoryKey } from '../src/db/bot-memory-keys.js';
 import { buildApp } from '../src/app.js';
 import type { ChatModel } from '../src/extraction/model.js';
 import { sha256 } from '../src/contracts.js';
@@ -21,7 +20,7 @@ const model: ChatModel = {
 it('accepts keyless bot history, publishes a Wiki, updates its display name and keeps read authorization', async () => {
   const project = await createProject(pool, 'keyless-history');
   const catscoRead = { token: 'test-catsco-reader' };
-  const app = await buildApp({ pool, model, botUploadProject: project.project_id, catscoRead });
+  const app = await buildApp({ pool, model, botUploadProject: project.project_id, catscoRead, identifyBot: async () => '365' });
   await app.ready();
   const headers = { authorization: 'Bearer ' + project.key };
   const response = await app.inject({ url: '/v1/bot-ingest/config' });
@@ -55,8 +54,7 @@ it('accepts keyless bot history, publishes a Wiki, updates its display name and 
     const search = await app.inject({ method: 'POST', url: '/v1/memories/search', headers, payload: { keywords: ['字体'], operator: 'OR' } });
     expect(search.json().items).toHaveLength(1);
     const source = search.json().items[0].source_refs[0];
-    const { token } = await issueBotMemoryKey(pool, project.project_id, '365');
-    const botHeaders = { authorization: 'Bearer ' + token };
+    const botHeaders = { authorization: 'ApiKey fixture-365', 'x-bot-uid': '365' };
     const botSearch = await app.inject({ method: 'POST', url: '/v1/bot-memory/search', headers: botHeaders, payload: { keywords: ['字体'] } });
     expect(botSearch.statusCode).toBe(200);
     expect(botSearch.json().items).toMatchObject([{ wiki_id: search.json().items[0].memory_id, title: 'Bot 上传记录' }]);

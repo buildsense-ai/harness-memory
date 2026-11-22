@@ -17,7 +17,6 @@ export async function migrate(pool: Pool) {
     await c.query(await readFile("src/db/migrations/010_record_fragments.sql", "utf8"));
     await c.query(await readFile("src/db/migrations/011_episode_indexes.sql", "utf8"));
     await c.query(await readFile("src/db/migrations/012_ingestion_bots.sql", "utf8"));
-    await c.query(await readFile("src/db/migrations/013_bot_memory_read.sql", "utf8"));
     await c.query("DROP INDEX IF EXISTS ingestion_episodes_read_run");
     await c.query("COMMIT");
   } catch (e) {

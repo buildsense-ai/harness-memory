@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { assert, ref } from './contracts.js';
-import { authenticateBotMemory } from './db/bot-memory-keys.js';
 import { isObject } from './extraction/output.js';
+import { botUid } from './ingestion/bot-identity.js';
 import { formatMemoryDocument } from './memories.js';
 import { readReference } from './read.js';
 
@@ -75,12 +75,7 @@ async function search(pool: Pool, project: string, bot: string, keywords: string
     const item = { wiki_id: row.id, title: row.title };
     return rank < snippetLimit ? { ...item, matched_keywords: row.matched, snippet: matchSnippet(row.markdown, row.matched) } : item;
   });
-  const retrieval_id = ref('ret');
-  await pool.query(
-    'insert into bot_memory_retrievals(id,project_id,bot_uid,wiki_ids) values($1,$2,$3,$4)',
-    [retrieval_id, project, bot, items.map(item => item.wiki_id)],
-  );
-  return { retrieval_id, items, has_more: rows.length > resultLimit };
+  return { retrieval_id: ref('ret'), items, has_more: rows.length > resultLimit };
 }
 
 async function findWiki(pool: Pool, project: string, bot: string, id: string) {
@@ -93,12 +88,39 @@ async function findWiki(pool: Pool, project: string, bot: string, id: string) {
   return wiki;
 }
 
-export async function registerBotMemory(app: FastifyInstance, pool: Pool, project: string) {
+export type IdentifyBot = (authorization: string) => Promise<string>;
+
+export const identifyCatsCompanyBot: IdentifyBot = async authorization => {
+  let response: Response;
+  try {
+    response = await fetch('https://app.catsco.cn/api/me', {
+      headers: { authorization }, redirect: 'error', signal: AbortSignal.timeout(3500),
+    });
+  } catch {
+    assert(false, 'Bot identity service unavailable', 503);
+  }
+  if (!response.ok) await response.body?.cancel();
+  assert(response.status !== 401 && response.status !== 403, 'invalid Bot credential', 401);
+  assert(response.ok, 'Bot identity service unavailable', 503);
+  const identity: unknown = await response.json().catch(() => null);
+  assert(isObject(identity), 'invalid Bot identity response', 503);
+  assert(identity.account_type === 'bot', 'Bot credential required', 403);
+  assert((typeof identity.uid === 'number' && Number.isSafeInteger(identity.uid)) ||
+    typeof identity.uid === 'string', 'invalid Bot identity response', 503);
+  return botUid(String(identity.uid));
+};
+
+export async function registerBotMemory(app: FastifyInstance, pool: Pool, project: string, identifyBot: IdentifyBot) {
   await app.register(async api => {
     api.decorateRequest('memoryBotUid', '');
     api.addHook('onRequest', async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');
-      request.setDecorator('memoryBotUid', await authenticateBotMemory(pool, project, request.headers.authorization));
+      const authorization = request.headers.authorization;
+      assert(authorization && /^ApiKey [^\s]{1,512}$/.test(authorization), 'Cats Company Bot credential required', 401);
+      const claimedBot = botUid(request.headers['x-bot-uid']);
+      const verifiedBot = await identifyBot(authorization);
+      assert(verifiedBot === claimedBot, 'Bot identity mismatch', 403);
+      request.setDecorator('memoryBotUid', verifiedBot);
     });
     api.post('/search', { bodyLimit: 24 * 1024 }, async request =>
       search(pool, project, request.getDecorator<string>('memoryBotUid'), searchKeywords(request.body)));
