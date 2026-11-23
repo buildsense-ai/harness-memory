@@ -80,17 +80,36 @@ it('ranks distinct OR hits, shows matched terms for all 30 results, and includes
   expect(repeated.statusCode).toBe(200);
   expect(repeated.json().items).toEqual(items);
   expect(repeated.json()).not.toHaveProperty('next_offset');
-  const expandedKeywords = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: {
-    keywords: [...Array.from({ length: 16 }, (_, i) => `unused-${i}`), '分页', 'x'.repeat(300)],
+  const maxKeywords = [' BOUNDARY ', 'boundary', '分页', ...Array.from({ length: 14 }, (_, i) => `unused-${i}`)];
+  const accepted = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: maxKeywords } });
+  expect(accepted.statusCode).toBe(200);
+  expect(accepted.json().items).toHaveLength(30);
+  const overLimit = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: {
+    keywords: [...maxKeywords, 'one-more'],
   } });
-  expect(expandedKeywords.statusCode).toBe(200);
-  expect(expandedKeywords.json().items).toHaveLength(30);
+  expect(overLimit.statusCode).toBe(400);
+  expect(overLimit.json().error).toContain('16 distinct keywords');
   const noHits = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['no exact hit'] } });
   expect(noHits.json()).toMatchObject({ items: [], has_more: false });
   for (const payload of [{ keywords: ['分页'], offset: 30 }, { keywords: ['分页'], bot_uid: '36' }, { keywords: ['分页'], operator: 'AND' }]) {
     expect((await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload })).statusCode).toBe(400);
   }
 });
+
+it('times out blocked Wiki searches and can search again after the lock is released', async () => {
+  const locker = await pool.connect();
+  try {
+    await locker.query('BEGIN');
+    await locker.query('LOCK TABLE memory_documents IN ACCESS EXCLUSIVE MODE');
+    const response = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['分页'] } });
+    expect(response.statusCode).toBe(504);
+  } finally {
+    await locker.query('ROLLBACK');
+    locker.release();
+  }
+  const response = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['分页'] } });
+  expect(response.statusCode).toBe(200);
+}, 20_000);
 
 it('verifies the existing Bot credential and pins full Wiki and Episode reads to the same Bot and Wiki', async () => {
   const a = await wiki('101', '# Retry\n\nConnection details.', '2026-01-02', true);

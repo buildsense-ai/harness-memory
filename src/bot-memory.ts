@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
-import { assert, ref } from './contracts.js';
+import type { Pool, QueryResult } from 'pg';
+import { assert, HttpError, ref } from './contracts.js';
 import { isObject } from './extraction/output.js';
 import { formatMemoryDocument } from './memories.js';
 import { readReference } from './read.js';
@@ -8,6 +8,7 @@ import { readReference } from './read.js';
 const snippetLimit = 10;
 const resultLimit = 30;
 const snippetLength = 280;
+const keywordLimit = 16;
 const wikiIdPattern = /^mem_[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 
 // The batch planner assigns one Bot source to the entire input snapshot.
@@ -24,10 +25,12 @@ function searchKeywords(body: unknown): string[] {
   assert(isObject(body) && Object.keys(body).every(key => key === 'keywords'), 'expected keywords');
   const { keywords } = body;
   assert(Array.isArray(keywords) && keywords.length >= 1, 'at least one keyword is required');
-  return [...new Set(keywords.map((word: unknown) => {
+  const distinct = [...new Set(keywords.map((word: unknown) => {
     assert(typeof word === 'string' && word.trim().length > 0 && !word.includes('\0'), 'invalid keyword');
     return fold(word.trim());
   }))];
+  assert(distinct.length <= keywordLimit, `expected at most ${keywordLimit} distinct keywords per search`);
+  return distinct;
 }
 
 function matchSnippet(markdown: string, keywords: string[]) {
@@ -53,23 +56,44 @@ function matchSnippet(markdown: string, keywords: string[]) {
 type SearchRow = { id: string; title: string; markdown: string; matched: string[] };
 
 async function search(pool: Pool, project: string, bot: string, keywords: string[]) {
-  const { rows } = await pool.query<SearchRow>(`
-    with wiki as (
-      select d.id,d.markdown,d.created_at,
-        btrim(split_part(d.markdown,chr(10),1), E' #\t\r') as title
-      ${scopedWiki}
-    )
-    select wiki.id,wiki.markdown,left(wiki.title,240) as title,hit.matched
-    from wiki
-    cross join lateral (
-      select array_agg(k.word order by k.position) as matched,
-        count(*) filter (where strpos(translate(wiki.title,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),k.word)>0) as title_hits
-      from unnest($3::text[]) with ordinality as k(word,position)
-      where strpos(translate(wiki.markdown,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),k.word)>0
-    ) hit
-    where hit.matched is not null
-    order by cardinality(hit.matched) desc,hit.title_hits desc,wiki.created_at desc,wiki.id
-    limit $4`, [project, bot, keywords, resultLimit + 1]);
+  const client = await pool.connect();
+  let result: QueryResult<SearchRow>;
+  let discardConnection = false;
+  try {
+    await client.query('BEGIN READ ONLY');
+    await client.query("SET LOCAL statement_timeout = '10s'");
+    result = await client.query<SearchRow>(`
+      with wiki as (
+        select d.id,d.markdown,d.created_at,
+          btrim(split_part(d.markdown,chr(10),1), E' #\t\r') as title
+        ${scopedWiki}
+      )
+      select wiki.id,wiki.markdown,left(wiki.title,240) as title,hit.matched
+      from wiki
+      cross join lateral (
+        select array_agg(k.word order by k.position) as matched,
+          count(*) filter (where strpos(translate(wiki.title,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),k.word)>0) as title_hits
+        from unnest($3::text[]) with ordinality as k(word,position)
+        where strpos(translate(wiki.markdown,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),k.word)>0
+      ) hit
+      where hit.matched is not null
+      order by cardinality(hit.matched) desc,hit.title_hits desc,wiki.created_at desc,wiki.id
+      limit $4`, [project, bot, keywords, resultLimit + 1]);
+    await client.query('COMMIT');
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      discardConnection = true;
+    }
+    if (error && typeof error === 'object' && 'code' in error && error.code === '57014') {
+      throw new HttpError(504, 'Wiki search exceeded its database time limit');
+    }
+    throw error;
+  } finally {
+    client.release(discardConnection);
+  }
+  const { rows } = result;
   const items = rows.slice(0, resultLimit).map((row, rank) => {
     const item = {
       wiki_id: row.id,
