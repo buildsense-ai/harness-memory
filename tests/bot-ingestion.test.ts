@@ -54,7 +54,7 @@ it('accepts keyless bot history, publishes a Wiki, updates its display name and 
     const search = await app.inject({ method: 'POST', url: '/v1/memories/search', headers, payload: { keywords: ['字体'], operator: 'OR' } });
     expect(search.json().items).toHaveLength(1);
     const source = search.json().items[0].source_refs[0];
-    const botHeaders = { authorization: 'ApiKey fixture-365', 'x-bot-uid': '365' };
+    const botHeaders = { authorization: 'ApiKey fixture-365' };
     const botSearch = await app.inject({ method: 'POST', url: '/v1/bot-memory/search', headers: botHeaders, payload: { keywords: ['字体'] } });
     expect(botSearch.statusCode).toBe(200);
     expect(botSearch.json().items).toMatchObject([{ wiki_id: search.json().items[0].memory_id, title: 'Bot 上传记录' }]);

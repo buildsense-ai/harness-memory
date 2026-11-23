@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { Pool } from 'pg';
 import { buildApp } from '../src/app.js';
+import { identifyCatsCompanyBot } from '../src/bot-memory.js';
 import { ref } from '../src/contracts.js';
 import { HttpError } from '../src/contracts.js';
 import { migrate } from '../src/db/migrate.js';
@@ -44,7 +45,7 @@ async function wiki(bot: string | null, markdown: string, date: string, withSour
   return { mem, episode };
 }
 
-const botHeaders = (uid: string) => ({ authorization: 'ApiKey fixture-' + uid, 'x-bot-uid': uid });
+const botHeaders = (uid: string) => ({ authorization: 'ApiKey fixture-' + uid });
 const search = '/v1/bot-memory/search';
 const page = (id: string) => '/v1/bot-memory/wikis/' + id;
 
@@ -102,5 +103,30 @@ it('verifies the existing Bot credential and pins full Wiki and Episode reads to
   expect(firstPage.json()).toMatchObject({ ref: a.episode, events: [{ content: 'What happens on retry?' }], next_offset: 1 });
   const nextPage = await app.inject({ method: 'POST', url: page(a.mem) + '/source', headers, payload: { ref: a.episode, offset: 1, limit: 1 } });
   expect(nextPage.json()).toMatchObject({ events: [{ content: 'The connection closes.' }], next_offset: null });
-  expect((await app.inject({ url: page(b.mem), headers: { ...headers, 'x-bot-uid': '102' } })).statusCode).toBe(403);
+  const claimedOtherBot = { ...headers, 'x-bot-uid': '102' };
+  expect((await app.inject({ url: page(a.mem), headers: claimedOtherBot })).statusCode).toBe(200);
+  expect((await app.inject({ url: page(b.mem), headers: claimedOtherBot })).statusCode).toBe(404);
+});
+
+it('uses the Cats Company UID as a string and rejects unverifiable identity', async () => {
+  const request = vi.spyOn(globalThis, 'fetch');
+  try {
+    request
+      .mockResolvedValueOnce(Response.json({ uid: '9223372036854775807' }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 403 }))
+      .mockResolvedValueOnce(new Response(null, { status: 502 }))
+      .mockResolvedValueOnce(Response.json({ uid: null }))
+      .mockRejectedValueOnce(new Error('timed out'));
+    const key = 'ApiKey fixture';
+    await expect(identifyCatsCompanyBot(key)).resolves.toBe('9223372036854775807');
+    expect(request).toHaveBeenNthCalledWith(1, 'https://app.catsco.cn/api/bot/identity', expect.objectContaining({
+      headers: { authorization: key }, redirect: 'error',
+    }));
+    for (const statusCode of [401, 401, 503, 503, 503]) {
+      await expect(identifyCatsCompanyBot(key)).rejects.toMatchObject({ statusCode });
+    }
+  } finally {
+    request.mockRestore();
+  }
 });

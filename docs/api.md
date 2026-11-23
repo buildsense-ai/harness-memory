@@ -49,7 +49,7 @@ XiaoBa `entry_type:"turn"` records with an ordered `messages` array, native `rol
 
 ### Bot memory for Branch
 
-Send the existing Cats Company Bot API key in the authorization header with the ApiKey scheme and the locally bound Bot UID in the X-Bot-UID header. The server verifies the credential against Cats Company and requires the verified Bot to match the claimed UID. This runtime API reads across the Bot's stored sessions. User-facing chat access uses its own conversation permissions.
+Send the existing Cats Company Bot API key in the `Authorization: ApiKey <key>` header. Memory verifies it through Cats Company's Bot identity endpoint on each request and uses the returned UID to scope the query. Invalid credentials return 401. If identity verification is unavailable or returns an invalid UID, the request returns 503. This runtime API reads across the Bot's stored sessions. User-facing chat access uses its own conversation permissions.
 
 | Route | Request | Response |
 |---|---|---|

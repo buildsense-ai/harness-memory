@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { assert, ref } from './contracts.js';
 import { isObject } from './extraction/output.js';
-import { botUid } from './ingestion/bot-identity.js';
 import { formatMemoryDocument } from './memories.js';
 import { readReference } from './read.js';
 
@@ -93,7 +92,7 @@ export type IdentifyBot = (authorization: string) => Promise<string>;
 export const identifyCatsCompanyBot: IdentifyBot = async authorization => {
   let response: Response;
   try {
-    response = await fetch('https://app.catsco.cn/api/me', {
+    response = await fetch('https://app.catsco.cn/api/bot/identity', {
       headers: { authorization }, redirect: 'error', signal: AbortSignal.timeout(3500),
     });
   } catch {
@@ -103,11 +102,9 @@ export const identifyCatsCompanyBot: IdentifyBot = async authorization => {
   assert(response.status !== 401 && response.status !== 403, 'invalid Bot credential', 401);
   assert(response.ok, 'Bot identity service unavailable', 503);
   const identity: unknown = await response.json().catch(() => null);
-  assert(isObject(identity), 'invalid Bot identity response', 503);
-  assert(identity.account_type === 'bot', 'Bot credential required', 403);
-  assert((typeof identity.uid === 'number' && Number.isSafeInteger(identity.uid)) ||
-    typeof identity.uid === 'string', 'invalid Bot identity response', 503);
-  return botUid(String(identity.uid));
+  const uid = isObject(identity) ? identity.uid : undefined;
+  assert(typeof uid === 'string' && /^[1-9][0-9]{0,18}$/.test(uid), 'invalid Bot identity response', 503);
+  return uid;
 };
 
 export async function registerBotMemory(app: FastifyInstance, pool: Pool, project: string, identifyBot: IdentifyBot) {
@@ -117,10 +114,7 @@ export async function registerBotMemory(app: FastifyInstance, pool: Pool, projec
       reply.header('Cache-Control', 'private, no-store');
       const authorization = request.headers.authorization;
       assert(authorization && /^ApiKey [^\s]{1,512}$/.test(authorization), 'Cats Company Bot credential required', 401);
-      const claimedBot = botUid(request.headers['x-bot-uid']);
-      const verifiedBot = await identifyBot(authorization);
-      assert(verifiedBot === claimedBot, 'Bot identity mismatch', 403);
-      request.setDecorator('memoryBotUid', verifiedBot);
+      request.setDecorator('memoryBotUid', await identifyBot(authorization));
     });
     api.post('/search', { bodyLimit: 24 * 1024 }, async request =>
       search(pool, project, request.getDecorator<string>('memoryBotUid'), searchKeywords(request.body)));
