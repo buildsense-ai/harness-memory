@@ -20,14 +20,16 @@ const scopedWiki = `
 
 const fold = (text: string) => text.replace(/[A-Z]/g, c => c.toLowerCase());
 
-function searchKeywords(body: unknown): string[] {
-  assert(isObject(body) && Object.keys(body).every(key => key === 'keywords'), 'expected keywords');
-  const { keywords } = body;
-  assert(Array.isArray(keywords) && keywords.length >= 1 && keywords.length <= 16, 'expected 1 to 16 keywords');
-  return [...new Set(keywords.map((word: unknown) => {
-    assert(typeof word === 'string' && word.trim().length > 0 && [...word].length <= 256 && !word.includes('\0'), 'invalid keyword');
+function searchInput(body: unknown) {
+  assert(isObject(body) && Object.keys(body).every(key => key === 'keywords' || key === 'offset'), 'expected keywords and optional offset');
+  const { keywords, offset = 0 } = body;
+  assert(typeof offset === 'number' && Number.isSafeInteger(offset) && offset >= 0, 'offset must be a non-negative integer');
+  assert(Array.isArray(keywords) && keywords.length >= 1, 'at least one keyword is required');
+  const terms = [...new Set(keywords.map((word: unknown) => {
+    assert(typeof word === 'string' && word.trim().length > 0 && !word.includes('\0'), 'invalid keyword');
     return fold(word.trim());
   }))];
+  return { keywords: terms, offset };
 }
 
 function matchSnippet(markdown: string, keywords: string[]) {
@@ -45,14 +47,14 @@ function matchSnippet(markdown: string, keywords: string[]) {
   const chars = [...best.paragraph];
   if (chars.length <= snippetLength) return best.paragraph;
   const first = [...best.paragraph.slice(0, best.first)].length;
-  const start = Math.max(0, first - Math.min(64, snippetLength - best.wordLength));
+  const start = Math.max(0, first - Math.max(0, Math.min(64, snippetLength - best.wordLength)));
   const end = start + snippetLength;
   return (start > 0 ? '…' : '') + chars.slice(start, end).join('') + (end < chars.length ? '…' : '');
 }
 
 type SearchRow = { id: string; title: string; markdown: string; matched: string[] };
 
-async function search(pool: Pool, project: string, bot: string, keywords: string[]) {
+async function search(pool: Pool, project: string, bot: string, { keywords, offset }: ReturnType<typeof searchInput>) {
   const { rows } = await pool.query<SearchRow>(`
     with wiki as (
       select d.id,d.markdown,d.created_at,
@@ -69,12 +71,13 @@ async function search(pool: Pool, project: string, bot: string, keywords: string
     ) hit
     where hit.matched is not null
     order by cardinality(hit.matched) desc,hit.title_hits desc,wiki.created_at desc,wiki.id
-    limit $4`, [project, bot, keywords, resultLimit + 1]);
+    offset $5 limit $4`, [project, bot, keywords, resultLimit + 1, offset]);
   const items = rows.slice(0, resultLimit).map((row, rank) => {
     const item = { wiki_id: row.id, title: row.title };
     return rank < snippetLimit ? { ...item, matched_keywords: row.matched, snippet: matchSnippet(row.markdown, row.matched) } : item;
   });
-  return { retrieval_id: ref('ret'), items, has_more: rows.length > resultLimit };
+  const hasMore = rows.length > resultLimit;
+  return { retrieval_id: ref('ret'), items, has_more: hasMore, next_offset: hasMore ? offset + items.length : null };
 }
 
 async function findWiki(pool: Pool, project: string, bot: string, id: string) {
@@ -117,7 +120,7 @@ export async function registerBotMemory(app: FastifyInstance, pool: Pool, projec
       request.setDecorator('memoryBotUid', await identifyBot(authorization));
     });
     api.post('/search', { bodyLimit: 24 * 1024 }, async request =>
-      search(pool, project, request.getDecorator<string>('memoryBotUid'), searchKeywords(request.body)));
+      search(pool, project, request.getDecorator<string>('memoryBotUid'), searchInput(request.body)));
     api.get<{ Params: { id: string } }>('/wikis/:id', async request => {
       const { memory_id: wiki_id, markdown, source_refs } = formatMemoryDocument(
         await findWiki(pool, project, request.getDecorator<string>('memoryBotUid'), request.params.id));

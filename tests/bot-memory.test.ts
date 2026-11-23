@@ -64,7 +64,7 @@ it('ranks distinct OR hits, serves ten excerpts plus twenty IDs, and returns a r
   }
   const response = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: [' 分页 ', '锚点', '分页'] } });
   expect(response.statusCode).toBe(200);
-  const { items, has_more, retrieval_id } = response.json();
+  const { items, has_more, retrieval_id, next_offset } = response.json();
   expect(items).toHaveLength(30);
   expect(has_more).toBe(true);
   expect(items.slice(0, 4).map((item: { wiki_id: string }) => item.wiki_id)).toEqual(hits.slice(0, 4).map(row => row.mem));
@@ -73,9 +73,20 @@ it('ranks distinct OR hits, serves ten excerpts plus twenty IDs, and returns a r
   expect(items.slice(0, 10).every((item: { snippet?: string }) => item.snippet)).toBe(true);
   expect(Object.keys(items[10]).sort()).toEqual(['title', 'wiki_id']);
   expect(retrieval_id).toMatch(/^ret_/);
+  expect(next_offset).toBe(30);
+  const nextPage = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['分页', '锚点'], offset: next_offset } });
+  expect(nextPage.statusCode).toBe(200);
+  expect(nextPage.json()).toMatchObject({ has_more: false, next_offset: null });
+  expect(nextPage.json().items).toHaveLength(2);
+  expect(new Set([...items, ...nextPage.json().items].map(item => item.wiki_id)).size).toBe(32);
+  const expandedKeywords = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: {
+    keywords: [...Array.from({ length: 16 }, (_, i) => `unused-${i}`), '分页', 'x'.repeat(300)],
+  } });
+  expect(expandedKeywords.statusCode).toBe(200);
+  expect(expandedKeywords.json().items).toHaveLength(30);
   const noHits = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['no exact hit'] } });
   expect(noHits.json()).toMatchObject({ items: [], has_more: false });
-  for (const payload of [{ keywords: ['分页'], bot_uid: '36' }, { keywords: ['分页'], operator: 'AND' }]) {
+  for (const payload of [{ keywords: ['分页'], offset: -1 }, { keywords: ['分页'], bot_uid: '36' }, { keywords: ['分页'], operator: 'AND' }]) {
     expect((await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload })).statusCode).toBe(400);
   }
 });
