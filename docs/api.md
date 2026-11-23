@@ -57,9 +57,9 @@ Send the existing Cats Company Bot API key in the `Authorization: ApiKey <key>` 
 | `GET /v1/bot-memory/wikis/:id` | Wiki ID in the path | `{wiki_id,markdown,source_refs}` with complete Markdown and its Episode reference. Use the same route to follow a linked Wiki within the Bot's scope. |
 | `POST /v1/bot-memory/wikis/:id/source` | `{"ref":"ep_UUID","offset":0,"limit":20}` | A page of original events from the Wiki's own Episode in source order. Follow `next_offset` until it is null. |
 
-Search matches literal substrings with OR across 1–16 distinct keywords after trimming and ASCII case folding. Results have one entry per Wiki, ordered by the number of distinct matching terms, the number of matching title terms, newest publication, then Wiki ID. Searches that exceed the 10-second database query timeout return HTTP 504. Use the returned retrieval ID to correlate results in the Branch log.
+Search matches literal substrings with OR across 1–16 distinct keywords after trimming and ASCII case folding. Each trimmed keyword can contain at most 256 Unicode code points. Results have one entry per Wiki, ordered by the number of distinct matching terms, the number of matching title terms, newest publication, then Wiki ID. Searches that exceed the 10-second database query timeout return HTTP 504. Use the returned retrieval ID to correlate results in the Branch log.
 
-Unknown or foreign Wikis and mismatched Episode references return 404. A missing or invalid credential returns 401. A mismatched Bot UID returns 403. Records without a Bot-attributed extraction run are excluded. Provenance in current keyless uploads is declared by the uploader.
+Unknown or foreign Wikis and mismatched Episode references return 404. A missing or invalid credential returns 401. The verified credential determines the Bot UID. The API ignores caller-supplied Bot UID headers. Records without a Bot-attributed extraction run are excluded. Provenance in current keyless uploads is declared by the uploader.
 
 Remote clients use HTTPS through the optional Bot read ingress in [Public upload ingress](public-upload.md#optional-bot-memory-reads).
 

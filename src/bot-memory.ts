@@ -9,6 +9,7 @@ const snippetLimit = 10;
 const resultLimit = 30;
 const snippetLength = 280;
 const keywordLimit = 16;
+const keywordMaxLength = 256;
 const wikiIdPattern = /^mem_[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 
 // The batch planner assigns one Bot source to the entire input snapshot.
@@ -27,7 +28,9 @@ function searchKeywords(body: unknown): string[] {
   assert(Array.isArray(keywords) && keywords.length >= 1, 'at least one keyword is required');
   const distinct = [...new Set(keywords.map((word: unknown) => {
     assert(typeof word === 'string' && word.trim().length > 0 && !word.includes('\0'), 'invalid keyword');
-    return fold(word.trim());
+    const keyword = word.trim();
+    assert([...keyword].length <= keywordMaxLength, `each keyword must be at most ${keywordMaxLength} characters`);
+    return fold(keyword);
   }))];
   assert(distinct.length <= keywordLimit, `expected at most ${keywordLimit} distinct keywords per search`);
   return distinct;

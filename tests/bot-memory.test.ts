@@ -89,6 +89,11 @@ it('ranks distinct OR hits, shows matched terms for all 30 results, and includes
   } });
   expect(overLimit.statusCode).toBe(400);
   expect(overLimit.json().error).toContain('16 distinct keywords');
+  const longest = '词'.repeat(256);
+  expect((await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: [` ${longest} `] } })).statusCode).toBe(200);
+  const tooLong = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: [`${longest}词`] } });
+  expect(tooLong.statusCode).toBe(400);
+  expect(tooLong.json().error).toContain('256 characters');
   const noHits = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['no exact hit'] } });
   expect(noHits.json()).toMatchObject({ items: [], has_more: false });
   for (const payload of [{ keywords: ['分页'], offset: 30 }, { keywords: ['分页'], bot_uid: '36' }, { keywords: ['分页'], operator: 'AND' }]) {
