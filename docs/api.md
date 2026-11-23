@@ -47,6 +47,24 @@ XiaoBa `entry_type:"turn"` records with an ordered `messages` array, native `rol
 
 ## Markdown search
 
+### Bot memory for Branch
+
+Send the existing Cats Company Bot API key in the `Authorization: ApiKey <key>` header. Memory verifies it through Cats Company's Bot identity endpoint on each request and uses the returned UID to scope the query. Invalid credentials return 401. If identity verification is unavailable or returns an invalid UID, the request returns 503. This runtime API reads across the Bot's stored sessions. User-facing chat access uses its own conversation permissions.
+
+| Route | Request | Response |
+|---|---|---|
+| `POST /v1/bot-memory/search` | `{"keywords":["图谱","分页","锚点"]}` | `{retrieval_id,items,has_more}`. Ranks 1–10 have `wiki_id`, `title`, `snippet`, and `matched_keywords`. Ranks 11–30 have `wiki_id` and `title`. |
+| `GET /v1/bot-memory/wikis/:id` | Wiki ID in the path | `{wiki_id,markdown,source_refs}` with complete Markdown and its Episode reference. Use the same route to follow a linked Wiki within the Bot's scope. |
+| `POST /v1/bot-memory/wikis/:id/source` | `{"ref":"ep_UUID","offset":0,"limit":20}` | A page of original events from the Wiki's own Episode in source order. Follow `next_offset` until it is null. |
+
+Search uses literal OR over 1–16 keywords, with ASCII case folding and keyword deduplication. Results have one entry per Wiki, ordered by the number of distinct matching terms, the number of matching title terms, newest publication, then Wiki ID. Use the returned retrieval ID to correlate results in the Branch log. The database layer performs only queries.
+
+Unknown or foreign Wikis and mismatched Episode references return 404. A missing or invalid credential returns 401. A mismatched Bot UID returns 403. Records without a Bot-attributed extraction run are excluded. Provenance in current keyless uploads is declared by the uploader.
+
+Remote clients use HTTPS through the optional Bot read ingress in [Public upload ingress](public-upload.md#optional-bot-memory-reads).
+
+### Project-key search
+
 `POST /v1/memories/search` requires the same Bearer Key used to upload the source logs. This first version preserves one Key per project: other Keys' data, even with identical source names or known references, is inaccessible.
 
 ```json

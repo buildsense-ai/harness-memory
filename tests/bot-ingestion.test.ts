@@ -20,7 +20,7 @@ const model: ChatModel = {
 it('accepts keyless bot history, publishes a Wiki, updates its display name and keeps read authorization', async () => {
   const project = await createProject(pool, 'keyless-history');
   const catscoRead = { token: 'test-catsco-reader' };
-  const app = await buildApp({ pool, model, botUploadProject: project.project_id, catscoRead });
+  const app = await buildApp({ pool, model, botUploadProject: project.project_id, catscoRead, identifyBot: async () => '365' });
   await app.ready();
   const headers = { authorization: 'Bearer ' + project.key };
   const response = await app.inject({ url: '/v1/bot-ingest/config' });
@@ -54,6 +54,15 @@ it('accepts keyless bot history, publishes a Wiki, updates its display name and 
     const search = await app.inject({ method: 'POST', url: '/v1/memories/search', headers, payload: { keywords: ['字体'], operator: 'OR' } });
     expect(search.json().items).toHaveLength(1);
     const source = search.json().items[0].source_refs[0];
+    const botHeaders = { authorization: 'ApiKey fixture-365' };
+    const botSearch = await app.inject({ method: 'POST', url: '/v1/bot-memory/search', headers: botHeaders, payload: { keywords: ['字体'] } });
+    expect(botSearch.statusCode).toBe(200);
+    expect(botSearch.json().items).toMatchObject([{ wiki_id: search.json().items[0].memory_id, title: 'Bot 上传记录' }]);
+    const wikiPath = '/v1/bot-memory/wikis/' + botSearch.json().items[0].wiki_id;
+    expect((await app.inject({ url: wikiPath, headers: botHeaders })).json().source_refs).toEqual([source]);
+    const episode = await app.inject({ method: 'POST', url: wikiPath + '/source', headers: botHeaders, payload: { ref: source } });
+    expect(episode.statusCode).toBe(200);
+    expect(episode.json().events).toContainEqual(expect.objectContaining({ kind: 'query', text: '记录字体搜索' }));
     expect((await app.inject({ method: 'POST', url: '/v1/read', headers, payload: { ref: source } })).statusCode).toBe(200);
     expect((await app.inject({ method: 'POST', url: '/v1/read', payload: { ref: source } })).statusCode).toBe(401);
     expect((await app.inject({ method: 'POST', url: '/v1/memories/search', payload: { keywords: ['字体'] } })).statusCode).toBe(401);

@@ -5,6 +5,7 @@ import { registerManifest } from './ingestion/manifests.js';
 import { isObject } from './extraction/output.js';
 import { ingestFragment } from './record-fragments.js';
 import { registerBotIngestion } from './bot-ingestion.js';
+import { identifyCatsCompanyBot, registerBotMemory, type IdentifyBot } from './bot-memory.js';
 import { registerCatscoMemory } from './catsco-memory.js';
 import type { PipelineConfig } from './extraction/memory-runner.js';
 import Fastify from "fastify";
@@ -32,6 +33,7 @@ export async function buildApp({
   budget = 65536,
   pipeline,
   botUploadProject = 'prj_bot_uploads',
+  identifyBot = identifyCatsCompanyBot,
   catscoRead,
 }: {
   pool: Pool;
@@ -40,6 +42,7 @@ export async function buildApp({
   pipeline?: Partial<PipelineConfig>;
   botUploadProject?: string;
   catscoRead?: { token: string };
+  identifyBot?: IdentifyBot;
 }) {
   const app = Fastify({ bodyLimit: 4 * 1024 * 1024, logger: false });
   app.get("/workbench", async (_request, reply) => reply.type("text/html; charset=utf-8").send(WORKBENCH_HTML));
@@ -63,6 +66,7 @@ export async function buildApp({
     return { ok: true };
   });
   await registerBotIngestion(app, pool, botUploadProject);
+  await registerBotMemory(app, pool, botUploadProject, identifyBot);
   if (catscoRead?.token) registerCatscoMemory(app, pool, botUploadProject, catscoRead.token);
   await app.register(
     async (api) => {
