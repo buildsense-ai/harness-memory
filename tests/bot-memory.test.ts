@@ -49,7 +49,7 @@ const botHeaders = (uid: string) => ({ authorization: 'ApiKey fixture-' + uid })
 const search = '/v1/bot-memory/search';
 const page = (id: string) => '/v1/bot-memory/wikis/' + id;
 
-it('ranks distinct OR hits, serves ten excerpts plus twenty IDs, and returns a retrieval ID', async () => {
+it('ranks distinct OR hits, shows matched terms for all 30 results, and includes snippets for the first 10', async () => {
   const hits = await Promise.all([
     wiki('365', '# 分页锚点\n\n一个带条件的稳定方案。', '2026-01-02'),
     wiki('365', '# 分页\n\n先确认版本。这里明确说明锚点如何恢复。', '2026-01-03'),
@@ -64,21 +64,22 @@ it('ranks distinct OR hits, serves ten excerpts plus twenty IDs, and returns a r
   }
   const response = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: [' 分页 ', '锚点', '分页'] } });
   expect(response.statusCode).toBe(200);
-  const { items, has_more, retrieval_id, next_offset } = response.json();
+  const { items, has_more, retrieval_id } = response.json();
   expect(items).toHaveLength(30);
   expect(has_more).toBe(true);
   expect(items.slice(0, 4).map((item: { wiki_id: string }) => item.wiki_id)).toEqual(hits.slice(0, 4).map(row => row.mem));
-  expect(items[0]).toMatchObject({ title: '分页锚点', matched_keywords: ['分页', '锚点'] });
+  expect(items[0]).toMatchObject({ title: '分页锚点', matched_keywords: ['分页', '锚点'], matched_keyword_count: 2 });
   expect(items[2].snippet).toContain('分页与锚点同时出现');
   expect(items.slice(0, 10).every((item: { snippet?: string }) => item.snippet)).toBe(true);
-  expect(Object.keys(items[10]).sort()).toEqual(['title', 'wiki_id']);
+  for (const item of items.slice(10)) {
+    expect(item).toMatchObject({ matched_keywords: ['分页'], matched_keyword_count: 1 });
+    expect(item).not.toHaveProperty('snippet');
+  }
   expect(retrieval_id).toMatch(/^ret_/);
-  expect(next_offset).toBe(30);
-  const nextPage = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['分页', '锚点'], offset: next_offset } });
-  expect(nextPage.statusCode).toBe(200);
-  expect(nextPage.json()).toMatchObject({ has_more: false, next_offset: null });
-  expect(nextPage.json().items).toHaveLength(2);
-  expect(new Set([...items, ...nextPage.json().items].map(item => item.wiki_id)).size).toBe(32);
+  const repeated = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['分页', '锚点'] } });
+  expect(repeated.statusCode).toBe(200);
+  expect(repeated.json().items).toEqual(items);
+  expect(repeated.json()).not.toHaveProperty('next_offset');
   const expandedKeywords = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: {
     keywords: [...Array.from({ length: 16 }, (_, i) => `unused-${i}`), '分页', 'x'.repeat(300)],
   } });
@@ -86,7 +87,7 @@ it('ranks distinct OR hits, serves ten excerpts plus twenty IDs, and returns a r
   expect(expandedKeywords.json().items).toHaveLength(30);
   const noHits = await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload: { keywords: ['no exact hit'] } });
   expect(noHits.json()).toMatchObject({ items: [], has_more: false });
-  for (const payload of [{ keywords: ['分页'], offset: -1 }, { keywords: ['分页'], bot_uid: '36' }, { keywords: ['分页'], operator: 'AND' }]) {
+  for (const payload of [{ keywords: ['分页'], offset: 30 }, { keywords: ['分页'], bot_uid: '36' }, { keywords: ['分页'], operator: 'AND' }]) {
     expect((await app.inject({ method: 'POST', url: search, headers: botHeaders('365'), payload })).statusCode).toBe(400);
   }
 });

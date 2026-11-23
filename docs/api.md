@@ -53,7 +53,7 @@ Send the existing Cats Company Bot API key in the `Authorization: ApiKey <key>` 
 
 | Route | Request | Response |
 |---|---|---|
-| `POST /v1/bot-memory/search` | `{"keywords":["图谱","分页","锚点"],"offset":0}` | `{retrieval_id,items,has_more,next_offset}`. The first ten results per page have `wiki_id`, `title`, `snippet`, and `matched_keywords`. The next twenty have `wiki_id` and `title`. To continue, send the same keywords with `offset` set to `next_offset`. The last page returns `next_offset: null`. |
+| `POST /v1/bot-memory/search` | `{"keywords":["图谱","分页","锚点"]}` | `{retrieval_id,items,has_more}`. Returns up to 30 ranked results, each with `wiki_id`, `title`, `matched_keywords`, and `matched_keyword_count`. The first ten also include a `snippet`. `has_more` indicates whether more than 30 Wikis matched. |
 | `GET /v1/bot-memory/wikis/:id` | Wiki ID in the path | `{wiki_id,markdown,source_refs}` with complete Markdown and its Episode reference. Use the same route to follow a linked Wiki within the Bot's scope. |
 | `POST /v1/bot-memory/wikis/:id/source` | `{"ref":"ep_UUID","offset":0,"limit":20}` | A page of original events from the Wiki's own Episode in source order. Follow `next_offset` until it is null. |
 
